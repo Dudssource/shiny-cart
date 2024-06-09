@@ -2,18 +2,27 @@ package emulator
 
 import (
 	"fmt"
-	"math/rand"
 	"time"
 )
 
+type Mode string
+
+const (
+	DMG  Mode = "DMG"
+	MGB  Mode = "MGB"
+	SGB  Mode = "SGB"
+	SGB2 Mode = "SGB2"
+	CGB  Mode = "CGB"
+	AGB  Mode = "AGB"
+	AGS  Mode = "AGS"
+)
+
 type Cpu struct {
-	memory [4096]Word // 16-bit address bus, 8kb memory
+	memory [8192]uint8 // 8-bit address bus, 8kb memory
 
 	pc Word // program counter
 	sp Word // stack pointer
 
-	a  uint8 // accumulator
-	f  uint8 // flag register
 	ir uint8 // interrupt register
 	ie uint8 // interrupt enable
 
@@ -23,35 +32,66 @@ type Cpu struct {
 	// 16 bit write only address bus
 	addressbus chan uint16
 
-	// general purpose register pairs
+	// accumulator & flag register
 	af Word
+
+	// general purpose register pairs
 	bc Word
 	de Word
 	hl Word
+
+	reg Registers
 }
 
-func (c *Cpu) fetch() Word {
+func (c *Cpu) fetch() uint8 {
 	// read from memory
 	data := c.memory[c.pc]
 	c.pc++
 	fmt.Println("Fetch")
-	return Word(data)
+	return data
 }
 
-func (c *Cpu) execute(opcode Word) {
-	fmt.Println("Execute")
+func (c *Cpu) init(mode Mode) {
+	switch mode {
+	case CGB:
+		c.af = 0x1100
+		c.bc = 0x0100
+		c.de = 0x0008
+		c.hl = 0x007C
+		c.sp = 0xFFFE
+		c.pc = 0x0100
+	}
+}
+
+func (c *Cpu) decode(opcode uint8) InstructionSet {
+
+	// HALT
+	if opcode == 0x76 {
+	}
+
+	// LD r8, r8
+	if opcode >= 0x40 && opcode <= 0x7F {
+		return InstructionSet{
+			execute: ld_r8_r8,
+			cycles:  1,
+		}
+	}
+
+	return InstructionSet{
+		execute: func(_ *Cpu, _ uint8) {},
+		cycles:  1,
+	}
 }
 
 func (c *Cpu) Start() {
 
+	// init classic game-boy
+	c.init(CGB)
+
 	start := time.Now()
 	ops := 0
 
-	for i := range c.memory {
-		c.memory[i] = 0x1
-	}
-
-	c.pc = Word(0x0000)
+	c.memory[0x0100] = 0x40
 
 	// one cicle = 1us
 	machineCycle := time.NewTicker(1 * time.Microsecond)
@@ -61,7 +101,7 @@ func (c *Cpu) Start() {
 	go func() {
 		var (
 			remainingCycles int
-			opcode          Word
+			opcode          uint8
 		)
 		for {
 			select {
@@ -86,11 +126,15 @@ func (c *Cpu) Start() {
 				if opcode > 0 && remainingCycles == 0 {
 
 					// decode - calculate how many cycles per instruction
-					remainingCycles = rand.Intn(4) + 1
+					is := c.decode(uint8(opcode))
+
+					// how many cycles for instruction
+					remainingCycles = is.cycles
+
 					fmt.Printf("required cycles %d\n", remainingCycles)
 
-					// execute in parallel
-					c.execute(opcode)
+					// execute
+					is.execute(c)
 
 					// reset opcode
 					opcode = 0x0
