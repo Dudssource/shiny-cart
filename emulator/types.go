@@ -34,9 +34,4 @@ func SetHigh(w Word, high uint8) Word {
 	return Word(high)<<8 | (w & 0xFF)
 }
 
-type InstructionSet struct {
-	execute instruction
-	cycles  int
-}
-
 type instruction func(c *Cpu, opcode uint8)

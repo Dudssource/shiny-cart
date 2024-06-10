@@ -40,6 +40,8 @@ type Cpu struct {
 	de Word
 	hl Word
 
+	requiredCycles int
+
 	reg Registers
 }
 
@@ -63,12 +65,11 @@ func (c *Cpu) init(mode Mode) {
 	}
 }
 
-func (c *Cpu) decode(opcode uint8) InstructionSet {
+func (c *Cpu) decode(opcode uint8) instruction {
 
 	if opcode == 0x0 {
-		// noop
 		// https://rgbds.gbdev.io/docs/v0.7.0/gbz80.7#NOP
-		return InstructionSet{func(_ *Cpu, _ uint8) {}, 1}
+		return op_nop
 	}
 
 	// decode based on the gbdev instruction set 'BLOCKS' approach:
@@ -86,28 +87,40 @@ func (c *Cpu) decode(opcode uint8) InstructionSet {
 		switch opcode & 0xF {
 		case 0x1:
 			// ld r16, imm16
+			return op_ld_r16_imm16
 		case 0x2:
 			// ld [r16mem], a
+			return op_ld_r16mem_a
 		case 0xA:
 			// ld a, [r16mem]
+			return op_ld_a_r16mem
 		case 0x8:
 			// ld [imm16], sp
+			return op_ld_imm16_mem_sp
 		case 0x3:
 			// incr r16
+			return op_inc_r16
 		case 0xB:
 			// dec r16
+			return op_dec_r16
 		case 0x9:
 			// add hl, r16
+			return op_add_hl_r16
 		}
 
 		// mask by 0111 to check how the rightmost 3 bits are set
 		switch opcode & 0x7 {
 		case 0x4:
 			// inc r8
+
+			// https://rgbds.gbdev.io/docs/v0.7.0/gbz80.7#INC__HL_
+			// https://rgbds.gbdev.io/docs/v0.7.0/gbz80.7#INC_r8
 		case 0x5:
 			// dec r8
 		case 0x6:
 			// ld r8, imm8
+			// https://rgbds.gbdev.io/docs/v0.7.0/gbz80.7#LD_r8,n8
+			return op_ld_r8_imm8
 		case 0x7:
 
 			// mask by 11111000 and right shift by 3 to ignore the rightmost 3 bits
@@ -160,14 +173,12 @@ func (c *Cpu) decode(opcode uint8) InstructionSet {
 			// https://rgbds.gbdev.io/docs/v0.7.0/gbz80.7#LD_r8,_HL_
 			// ld [hl], r8
 			// https://rgbds.gbdev.io/docs/v0.7.0/gbz80.7#LD__HL_,r8
-			return InstructionSet{ld_r8_r8, 1}
+			return op_ld_r8_r8
 		}
 	}
 
-	return InstructionSet{
-		execute: func(_ *Cpu, _ uint8) {},
-		cycles:  1,
-	}
+	// default is nop, might check for errors later
+	return op_nop
 }
 
 func (c *Cpu) Start() {
