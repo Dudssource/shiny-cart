@@ -112,14 +112,12 @@ func (c *Cpu) decode(opcode uint8) instruction {
 		switch opcode & 0x7 {
 		case 0x4:
 			// inc r8
-
-			// https://rgbds.gbdev.io/docs/v0.7.0/gbz80.7#INC__HL_
-			// https://rgbds.gbdev.io/docs/v0.7.0/gbz80.7#INC_r8
+			return op_inc_r8
 		case 0x5:
 			// dec r8
+			return op_dec_r8
 		case 0x6:
 			// ld r8, imm8
-			// https://rgbds.gbdev.io/docs/v0.7.0/gbz80.7#LD_r8,n8
 			return op_ld_r8_imm8
 		case 0x7:
 
@@ -128,12 +126,16 @@ func (c *Cpu) decode(opcode uint8) instruction {
 
 			case 0x0:
 				// rlca
+				return op_rotate_rlca
 			case 0x1:
 				// rrca
+				return op_rotate_rrca
 			case 0x2:
 				// rla
+				return op_rotate_rla
 			case 0x3:
 				// rra
+				return op_rotate_rra
 			case 0x4:
 				// daa
 			case 0x5:

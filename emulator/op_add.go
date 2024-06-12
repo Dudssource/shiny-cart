@@ -8,10 +8,12 @@ func op_add_hl_r16(c *Cpu, opcode uint8) {
 	c.requiredCycles = 2
 
 	// read flags
-	flags := c.reg.r_flag()
+	flags := c.reg.r_flags()
 
-	// set n_flag=off
-	flags &= ^n_flag
+	// no subtraction
+	// disable carry flag as default
+	// disable half-carry flag as default
+	flags &= ^n_flag & ^c_flag & ^h_flag
 
 	// 0b00110000
 	dst := (opcode & 0x30) >> 4
@@ -20,41 +22,24 @@ func op_add_hl_r16(c *Cpu, opcode uint8) {
 	nn := c.reg.r16(dst)
 
 	// HL
-	hl := c.reg.r16(reg_h)
+	hl := c.reg.r16(reg_hl)
 
-	// L + lsb(NN)
-	result_l := hl.Low() + nn.Low()
+	// HL + NN
+	result := uint32(hl + nn)
 
-	// if result is greater than 0xFF, set carry=on
-	if result_l > 0xFF {
-		flags &= c_flag
+	// if result is greater than 0xFFF, set half-carry=on (bit 11)
+	if (hl&0xFFF + nn&0xFFF) > 0xFFF {
+		flags |= h_flag
 	}
 
-	// if result is greater than 0xF, set carry n=on
-	// TODO: Review
-	if (result_l&0xF)>>3 == 1 {
-		flags &= n_flag
+	// if result is greater than 0xFFFF, set carry=on (bit 15)
+	if result > 0xFFFF {
+		flags |= c_flag
+		result = result - 0xFFFF
 	}
 
-	// set L
-	c.reg.w8(reg_l, result_l)
-
-	// H + msb(NN) + flags.C
-	result_h := hl.High() + nn.High() + uint8((flags&c_flag)>>4)
-
-	// if result is greater than 0xFF, set carry=on
-	if (result_h & 0xFF) > 0xF {
-		flags &= c_flag
-	}
-
-	// if result is greater than 0xF, set carry n=on
-	// TODO: Review
-	if (result_h&0xF)>>3 == 1 {
-		flags &= n_flag
-	}
-
-	// set H
-	c.reg.w8(reg_h, result_h)
+	// set HL
+	c.reg.w16(reg_h, Word(result))
 
 	// save flags
 	c.reg.w_flag(flags)

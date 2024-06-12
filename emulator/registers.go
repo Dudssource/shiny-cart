@@ -53,6 +53,6 @@ func (c *Registers) w_flag(v flag) {
 	c.w8(reg_f, uint8(v))
 }
 
-func (c *Registers) r_flag() flag {
+func (c *Registers) r_flags() flag {
 	return flag(c.r8(reg_f))
 }
