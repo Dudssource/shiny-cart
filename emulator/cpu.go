@@ -63,6 +63,7 @@ func (c *Cpu) init(mode Mode) {
 		c.sp = 0xFFFE
 		c.pc = 0x0100
 	}
+	c.memory = &Memory{}
 }
 
 func (c *Cpu) decode(opcode uint8) instruction {
@@ -229,12 +230,12 @@ func (c *Cpu) Start() {
 					is := c.decode(uint8(opcode))
 
 					// how many cycles for instruction
-					remainingCycles = is.cycles
+					remainingCycles = c.requiredCycles
 
 					fmt.Printf("required cycles %d\n", remainingCycles)
 
 					// execute
-					is.execute(c, opcode)
+					is(c, opcode)
 
 					// reset opcode
 					opcode = 0x0
