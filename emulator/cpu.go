@@ -49,7 +49,6 @@ func (c *Cpu) fetch() uint8 {
 	// read from memory
 	data := c.memory.Read(c.pc)
 	c.pc++
-	fmt.Println("Fetch")
 	return data
 }
 
@@ -139,12 +138,16 @@ func (c *Cpu) decode(opcode uint8) instruction {
 				return op_rotate_rra
 			case 0x4:
 				// daa
+				return op_daa
 			case 0x5:
 				// cpl
+				return op_cpl
 			case 0x6:
 				// scf
+				return op_scf
 			case 0x7:
 				// ccf
+				return op_ccf
 			}
 
 		case 0x0:
@@ -155,6 +158,7 @@ func (c *Cpu) decode(opcode uint8) instruction {
 				// https://gist.github.com/SonoSooS/c0055300670d678b5ae8433e20bea595#nop-and-stop
 			case 0x3:
 				// jr imm8
+				return op_jr_imm8
 			default:
 				// jr cond, imm8
 			}
