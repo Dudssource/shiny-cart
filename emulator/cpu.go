@@ -26,22 +26,9 @@ type Cpu struct {
 	ir uint8 // interrupt register
 	ie uint8 // interrupt enable
 
-	// 8 bit bi-directional data bus
-	databus chan uint8
-
-	// 16 bit write only address bus
-	addressbus chan uint16
-
-	// accumulator & flag register
-	af Word
-
-	// general purpose register pairs
-	bc Word
-	de Word
-	hl Word
-
 	requiredCycles int
 
+	// general purpose register pairs
 	reg Registers
 }
 
@@ -55,10 +42,11 @@ func (c *Cpu) fetch() uint8 {
 func (c *Cpu) init(mode Mode) {
 	switch mode {
 	case CGB:
-		c.af = 0x1100
-		c.bc = 0x0100
-		c.de = 0x0008
-		c.hl = 0x007C
+		c.reg.w8(reg_a, 0x11)
+		c.reg.w_flag(0x0)
+		c.reg.w16(reg_bc, 0x0100)
+		c.reg.w16(reg_de, 0x0008)
+		c.reg.w16(reg_hl, 0x007C)
 		c.sp = 0xFFFE
 		c.pc = 0x0100
 	}
@@ -156,11 +144,13 @@ func (c *Cpu) decode(opcode uint8) instruction {
 			case 0x2:
 				// stop
 				// https://gist.github.com/SonoSooS/c0055300670d678b5ae8433e20bea595#nop-and-stop
+				return op_nop
 			case 0x3:
 				// jr imm8
 				return op_jr_imm8
 			default:
 				// jr cond, imm8
+				return op_jr_cond_imm8
 			}
 		}
 
@@ -175,12 +165,64 @@ func (c *Cpu) decode(opcode uint8) instruction {
 			// https://gbdev.io/pandocs/halt.html#halt
 		default:
 			// ld r8, r8
-			// https://rgbds.gbdev.io/docs/v0.7.0/gbz80.7#LD_r8,r8
-			// ld r8, [hl]
-			// https://rgbds.gbdev.io/docs/v0.7.0/gbz80.7#LD_r8,_HL_
-			// ld [hl], r8
-			// https://rgbds.gbdev.io/docs/v0.7.0/gbz80.7#LD__HL_,r8
 			return op_ld_r8_r8
+		}
+
+	/*
+	 * BLOCK 2
+	 */
+	case 0x2:
+
+		// get the bits from 5 to 3 (left to right)
+		switch (opcode & 0x38) >> 3 {
+		case 0x0:
+			// add a, r8
+			return op_add_a_r8
+		case 0x1:
+			// adc a, r8
+			return op_adc_a_r8
+		case 0x2:
+			// sub a, r8
+		case 0x3:
+			// sbc a, r8
+		case 0x4:
+			// and a, r8
+		case 0x5:
+			// xor a, r8
+		case 0x6:
+			// or a, r8
+		case 0x7:
+			// cp a, r8
+		}
+
+	/*
+	 * BLOCK 3
+	 */
+	case 0x3:
+
+		// check the three rightmost bits
+		switch opcode & 0x7 {
+
+		case 0x6:
+			// get the bits from 5 to 3 (left to right)
+			switch (opcode & 0x38) >> 3 {
+			case 0x0:
+				// add a, imm8
+			case 0x1:
+				// adc a, imm8
+			case 0x2:
+				// sub a, imm8
+			case 0x3:
+				// sbc a, imm8
+			case 0x4:
+				// and a, imm8
+			case 0x5:
+				// xor a, imm8
+			case 0x6:
+				// or a, imm8
+			case 0x7:
+				// cp a, imm8
+			}
 		}
 	}
 
