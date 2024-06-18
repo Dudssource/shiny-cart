@@ -52,7 +52,7 @@ func op_dec_r8(c *Cpu, opcode uint8) {
 		}
 
 		// set half-carry flag
-		if (ihl&0xF)-1 < 0 {
+		if int8(ihl&0xF)-1 < 0 {
 			flags |= h_flag
 		}
 
@@ -76,7 +76,7 @@ func op_dec_r8(c *Cpu, opcode uint8) {
 		}
 
 		// half-carry=on
-		if (r8&0xF)-1 < 0 {
+		if int8(r8&0xF)-1 < 0 {
 			flags |= h_flag
 		}
 
