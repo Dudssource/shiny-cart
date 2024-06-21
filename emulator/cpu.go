@@ -183,16 +183,22 @@ func (c *Cpu) decode(opcode uint8) instruction {
 			return op_adc_a_r8
 		case 0x2:
 			// sub a, r8
+			return op_sub_a_r8
 		case 0x3:
 			// sbc a, r8
+			return op_sbc_a_r8
 		case 0x4:
 			// and a, r8
+			return op_and_a_r8
 		case 0x5:
 			// xor a, r8
+			return op_xor_a_r8
 		case 0x6:
 			// or a, r8
+			return op_or_a_r8
 		case 0x7:
 			// cp a, r8
+			return op_cp_a_r8
 		}
 
 	/*
@@ -208,20 +214,28 @@ func (c *Cpu) decode(opcode uint8) instruction {
 			switch (opcode & 0x38) >> 3 {
 			case 0x0:
 				// add a, imm8
+				return op_add_a_imm8
 			case 0x1:
 				// adc a, imm8
+				return op_adc_a_imm8
 			case 0x2:
 				// sub a, imm8
+				return op_sub_a_imm8
 			case 0x3:
 				// sbc a, imm8
+				return op_sbc_a_imm8
 			case 0x4:
 				// and a, imm8
+				return op_and_a_imm8
 			case 0x5:
 				// xor a, imm8
+				return op_xor_a_imm8
 			case 0x6:
 				// or a, imm8
+				return op_or_a_imm8
 			case 0x7:
 				// cp a, imm8
+				return op_cp_a_imm8
 			}
 		}
 	}
