@@ -209,6 +209,15 @@ func (c *Cpu) decode(opcode uint8) instruction {
 		// check the three rightmost bits
 		switch opcode & 0x7 {
 
+		case 0x0:
+			// ret cond
+		case 0x2:
+			// jp cond, imm16
+		case 0x4:
+			// call cond, imm16
+		case 0x7:
+			// rst tgt3
+
 		case 0x6:
 			// get the bits from 5 to 3 (left to right)
 			switch (opcode & 0x38) >> 3 {
