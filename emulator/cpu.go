@@ -20,11 +20,13 @@ const (
 type Cpu struct {
 	memory *Memory // 8-bit address bus, 8kb memory
 
-	pc Word // program counter
-	sp Word // stack pointer
+	pc    Word // program counter
+	sp    Word // stack pointer
+	stack [64]uint8
 
-	ir uint8 // interrupt register
-	ie uint8 // interrupt enable
+	ir  uint8 // interrupt register
+	ie  uint8 // interrupt enable
+	ime uint8 // interrupt master enable
 
 	requiredCycles int
 
@@ -206,46 +208,50 @@ func (c *Cpu) decode(opcode uint8) instruction {
 	 */
 	case 0x3:
 
-		// check the three rightmost bits
-		switch opcode & 0x7 {
-
-		case 0x0:
-			// ret cond
-		case 0x2:
-			// jp cond, imm16
-		case 0x4:
-			// call cond, imm16
-		case 0x7:
-			// rst tgt3
-
-		case 0x6:
-			// get the bits from 5 to 3 (left to right)
-			switch (opcode & 0x38) >> 3 {
-			case 0x0:
-				// add a, imm8
-				return op_add_a_imm8
-			case 0x1:
-				// adc a, imm8
-				return op_adc_a_imm8
-			case 0x2:
-				// sub a, imm8
-				return op_sub_a_imm8
-			case 0x3:
-				// sbc a, imm8
-				return op_sbc_a_imm8
-			case 0x4:
-				// and a, imm8
-				return op_and_a_imm8
-			case 0x5:
-				// xor a, imm8
-				return op_xor_a_imm8
-			case 0x6:
-				// or a, imm8
-				return op_or_a_imm8
-			case 0x7:
-				// cp a, imm8
-				return op_cp_a_imm8
-			}
+		// get the bits from 5 to 3 (left to right)
+		switch opcode {
+		case 0xC3:
+			// jp imm16
+			return op_jp_imm16
+		case 0xC6:
+			// add a, imm8
+			return op_add_a_imm8
+		case 0xC9:
+			// ret
+			return op_ret
+		case 0xCB:
+			// CB prefixed
+			// https://gbdev.io/pandocs/CPU_Instruction_Set.html#cb-prefix-instructions
+		case 0xCD:
+			// call imm16
+			return op_call_imm16
+		case 0xCE:
+			// adc a, imm8
+			return op_adc_a_imm8
+		case 0xD6:
+			// sub a, imm8
+			return op_sub_a_imm8
+		case 0xD9:
+			// reti
+			return op_reti
+		case 0xDE:
+			// sbc a, imm8
+			return op_sbc_a_imm8
+		case 0xE6:
+			// and a, imm8
+			return op_and_a_imm8
+		case 0xE9:
+			// jp hl
+			return op_jp_hl
+		case 0xEE:
+			// xor a, imm8
+			return op_xor_a_imm8
+		case 0xF6:
+			// or a, imm8
+			return op_or_a_imm8
+		case 0xFE:
+			// cp a, imm8
+			return op_cp_a_imm8
 		}
 	}
 
