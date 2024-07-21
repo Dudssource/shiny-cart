@@ -237,21 +237,39 @@ func (c *Cpu) decode(opcode uint8) instruction {
 		case 0xDE:
 			// sbc a, imm8
 			return op_sbc_a_imm8
+		case 0xE0:
+			// ldh [imm8], a
+			return op_ldh_imm8_a
 		case 0xE2:
 			// ldh [c], a
 			return op_ldh_c_a
 		case 0xE6:
 			// and a, imm8
 			return op_and_a_imm8
+		case 0xE8:
+			// add sp, imm8
+			return op_add_sp_imm8
 		case 0xE9:
 			// jp hl
 			return op_jp_hl
+		case 0xEA:
+			// ld [n16], a
+			return op_ld_imm16_a
 		case 0xEE:
 			// xor a, imm8
 			return op_xor_a_imm8
+		case 0xF0:
+			// ldh a, [imm8]
+			return op_ldh_a_imm8
+		case 0xF2:
+			// ld a, [c]
+			return op_ldh_a_c
 		case 0xF6:
 			// or a, imm8
 			return op_or_a_imm8
+		case 0xFA:
+			// ld a, [imm16]
+			return op_ld_a_imm16
 		case 0xFE:
 			// cp a, imm8
 			return op_cp_a_imm8

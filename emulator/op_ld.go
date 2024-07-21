@@ -198,3 +198,20 @@ func op_ld_imm16_mem_sp(c *Cpu, opcode uint8) {
 	// write to memory the msb of sp, little-endian
 	c.memory.Write(nn, sp.High())
 }
+
+// https://rgbds.gbdev.io/docs/v0.7.0/gbz80.7#LD_A,_n16_
+func op_ld_a_imm16(c *Cpu, _ uint8) {
+	c.requiredCycles = 4
+	z := c.fetch()
+	w := c.fetch()
+	wz := c.memory.Read(NewWord(w, z))
+	c.reg.w8(reg_a, wz)
+}
+
+// https://rgbds.gbdev.io/docs/v0.7.0/gbz80.7#LD__n16_,A
+func op_ld_imm16_a(c *Cpu, _ uint8) {
+	c.requiredCycles = 4
+	nn_lsb := c.fetch()
+	nn_msb := c.fetch()
+	c.memory.Write(NewWord(nn_msb, nn_lsb), c.reg.r8(reg_a))
+}

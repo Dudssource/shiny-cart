@@ -183,3 +183,25 @@ func add_a(c *Cpu, nn uint8) {
 	// save flags
 	c.reg.w_flag(flags)
 }
+
+// https://rgbds.gbdev.io/docs/v0.7.0/gbz80.7#ADD_SP,e8
+func op_add_sp_imm8(c *Cpu, _ uint8) {
+	c.requiredCycles = 4
+	flags := c.reg.r_flags()
+	flags &= ^z_flag & ^n_flag
+	z := c.fetch()
+	splsb := c.sp.Low()
+
+	if (z&0xF + splsb&0xF) > 0xF {
+		flags |= h_flag
+	}
+
+	result := z + splsb
+	if result > 0xFF {
+		flags |= c_flag
+		result -= 0xFF
+	}
+
+	result2 := c.sp.High() + uint8((flags&c_flag)>>4)
+	c.sp = NewWord(result2, result)
+}
