@@ -11,5 +11,5 @@ func op_ei(c *Cpu, _ uint8) {
 func op_di(c *Cpu, _ uint8) {
 	// m-cycles = 1
 	c.requiredCycles = 1
-	c.ime = 1
+	c.ime = 0
 }

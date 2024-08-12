@@ -264,15 +264,48 @@ func (c *Cpu) decode(opcode uint8) instruction {
 		case 0xF2:
 			// ld a, [c]
 			return op_ldh_a_c
+		case 0xF3:
+			// di
+			return op_di
 		case 0xF6:
 			// or a, imm8
 			return op_or_a_imm8
+		case 0xF8:
+			// ld hl, SP+e8
+			return op_ld_sp_e
+		case 0xF9:
+			// ld sp, hl
+			return op_ld_sp_hl
 		case 0xFA:
 			// ld a, [imm16]
 			return op_ld_a_imm16
+		case 0xFB:
+			// ei
+			return op_ei
 		case 0xFE:
 			// cp a, imm8
 			return op_cp_a_imm8
+		}
+
+		// since we are inside block 3, mask to get the 3 rightmost bits
+		switch opcode & 0x7 {
+		case 0x0:
+			// ret cond
+		case 0x2:
+			// jp cond, imm16
+		case 0x4:
+			// call cond, imm16
+		case 0x7:
+			// rst tgt3
+		}
+
+		// also try to mask the 4 rightmost bits
+		switch opcode & 0xf {
+
+		case 0x1:
+			// pop r16stk
+		case 0x5:
+			// push r16stk
 		}
 	}
 
