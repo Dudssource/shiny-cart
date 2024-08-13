@@ -20,3 +20,16 @@ func op_jp_hl(c *Cpu, opcode uint8) {
 	// read hl into pc
 	c.pc = c.reg.r16(reg_hl)
 }
+
+// https://rgbds.gbdev.io/docs/v0.8.0/gbz80.7#JP_cc,n16
+func op_jp_cond(c *Cpu, opcode uint8) {
+	c.requiredCycles = 3
+	nn_lsb := c.fetch()
+	nn_msb := c.fetch()
+	nn := NewWord(nn_msb, nn_lsb)
+	match := eval(c.reg.r_flags(), opcode)
+	if match {
+		c.requiredCycles = 4
+		c.pc = nn
+	}
+}

@@ -291,10 +291,13 @@ func (c *Cpu) decode(opcode uint8) instruction {
 		switch opcode & 0x7 {
 		case 0x0:
 			// ret cond
+			return op_ret_cond
 		case 0x2:
 			// jp cond, imm16
+			return op_jp_cond
 		case 0x4:
 			// call cond, imm16
+			return op_call_cond
 		case 0x7:
 			// rst tgt3
 		}

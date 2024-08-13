@@ -20,3 +20,24 @@ func op_reti(c *Cpu, opcode uint8) {
 	// enable interrupts
 	c.ime = 1
 }
+
+// https://rgbds.gbdev.io/docs/v0.7.0/gbz80.7#RET_cc
+func op_ret_cond(c *Cpu, opcode uint8) {
+
+	// my-cycles = 2
+	c.requiredCycles = 2
+
+	match := eval(c.reg.r_flags(), opcode)
+
+	if match {
+
+		c.requiredCycles = 5
+
+		lsb := c.stack[c.sp]
+		c.sp++
+		msb := c.stack[c.sp]
+		c.sp++
+
+		c.pc = NewWord(msb, lsb)
+	}
+}

@@ -20,3 +20,22 @@ func op_call_imm16(c *Cpu, _ uint8) {
 	c.stack[c.sp] = nn_lsb
 	c.sp++
 }
+
+// https://rgbds.gbdev.io/docs/v0.8.0/gbz80.7#CALL_cc,n16
+func op_call_cond(c *Cpu, opcode uint8) {
+	c.requiredCycles = 3
+	z := c.fetch()
+	w := c.fetch()
+
+	match := eval(c.reg.r_flags(), opcode)
+
+	if match {
+		c.requiredCycles = 6
+		c.sp--
+		c.memory.Write(c.sp, c.pc.High())
+		c.sp--
+		c.memory.Write(c.sp, c.pc.Low())
+		c.pc = NewWord(w, z)
+	}
+
+}
