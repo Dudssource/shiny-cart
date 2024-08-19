@@ -300,6 +300,7 @@ func (c *Cpu) decode(opcode uint8) instruction {
 			return op_call_cond
 		case 0x7:
 			// rst tgt3
+			return op_rst
 		}
 
 		// also try to mask the 4 rightmost bits
@@ -307,8 +308,10 @@ func (c *Cpu) decode(opcode uint8) instruction {
 
 		case 0x1:
 			// pop r16stk
+			return op_pop_r16stk
 		case 0x5:
 			// push r16stk
+			return op_push_r16stk
 		}
 	}
 
