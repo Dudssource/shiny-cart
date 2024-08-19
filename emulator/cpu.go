@@ -222,6 +222,18 @@ func (c *Cpu) decode(opcode uint8) instruction {
 		case 0xCB:
 			// CB prefixed
 			// https://gbdev.io/pandocs/CPU_Instruction_Set.html#cb-prefix-instructions
+			prefix := c.fetch()
+
+			switch prefix & 0xF8 {
+			case 0x0:
+				// rlc r8
+				return op_rlc_r8
+				// from here
+			case 0x1:
+				// rrc r8
+				return op_rrc_r8
+			}
+
 		case 0xCD:
 			// call imm16
 			return op_call_imm16

@@ -50,7 +50,8 @@ func op_pop_r16stk(c *Cpu, opcode uint8) {
 		c.reg.w16(reg_hl, NewWord(msb, lsb))
 	case 0x3:
 		flags := c.reg.r_flags()
-		c.reg.w8(reg_f, uint8(flags)|(lsb&0xF0))
+		flags |= flag(lsb & 0xF0)
+		c.reg.w_flag(flags)
 		c.reg.w8(reg_a, msb)
 	}
 }
