@@ -232,6 +232,30 @@ func (c *Cpu) decode(opcode uint8) instruction {
 			case 0x1:
 				// rrc r8
 				return op_rrc_r8
+			case 0x3:
+				// rr r8
+				return op_rr_r8
+			case 0x4:
+				// sla r8
+				return op_sla_r8
+			case 0x5:
+				// sra r8
+				return op_sra_r8
+			case 0x6:
+				// swap r8
+				return op_swap_r8
+			}
+
+			switch prefix & 0xC0 {
+			case 0x1:
+				// bit b3, r8
+				return op_bit_r8
+			case 0x2:
+				// res b3, r8
+				return op_res_r8
+			case 0x3:
+				// set b3, r8
+				return op_set_r8
 			}
 
 		case 0xCD:

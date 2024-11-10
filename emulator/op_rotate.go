@@ -151,3 +151,64 @@ func op_rotate_rra(c *Cpu, opcode uint8) {
 	// save flags
 	c.reg.w_flag(flags)
 }
+
+// https://rgbds.gbdev.io/docs/v0.8.0/gbz80.7#RR_r8
+// https://rgbds.gbdev.io/docs/v0.8.0/gbz80.7#RR__HL_
+func op_rr_r8(c *Cpu, opcode uint8) {
+
+	c.requiredCycles = 2
+
+	flags := c.reg.r_flags()
+
+	// reset z, n, h
+	flags &= ^(h_flag | n_flag | z_flag)
+
+	// save current carry flag
+	old_carry := uint8((flags & c_flag) >> 4)
+
+	// get operand
+	var nn uint8
+	r8 := (opcode & 0x7)
+
+	// check indirect hl or not
+	if r8 == reg_indirect_hl {
+
+		c.requiredCycles = 4
+
+		hl := c.reg.r16(reg_hl)
+		nn = c.memory.Read(hl)
+	} else {
+		nn = c.reg.r8(r8)
+	}
+
+	// get the rightmost bit as the new value for carry
+	new_carry := nn & 0x1
+
+	// shift right by 1
+	nn >>= 1
+
+	// set the leftmost bit as the old carry
+	if old_carry == 0 {
+		nn &= ^(old_carry << 7)
+	} else {
+		nn |= (old_carry << 7)
+	}
+
+	if nn == 0 {
+		flags |= z_flag
+	}
+
+	// write
+	if r8 == reg_indirect_hl {
+		hl := c.reg.r16(reg_hl)
+		c.memory.Write(hl, nn)
+	} else {
+		c.reg.w8(r8, nn)
+	}
+
+	// set the new carry flag
+	flags |= flag(new_carry << 4)
+
+	// save the flags
+	c.reg.w_flag(flags)
+}
