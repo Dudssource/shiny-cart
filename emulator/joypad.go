@@ -2,6 +2,7 @@ package emulator
 
 import (
 	"fmt"
+	"log"
 	"sync"
 	"time"
 
@@ -37,6 +38,9 @@ func (j *Joypad) stop() error {
 	select {
 	// wait until Joypad stops
 	case <-j.doneChan:
+		// close channels
+		close(j.stopChan)
+		close(j.doneChan)
 		return nil
 	case <-timeout.C:
 		timeout.Stop()
@@ -44,23 +48,23 @@ func (j *Joypad) stop() error {
 	}
 }
 
-func (j *Joypad) init() {
+func (j *Joypad) init(mCycle <-chan int) {
 
 	// no button selected, all keys released
 	j.c.memory.Write(PORT_JOYPAD, 0x3F)
 
-	// create IO ticker
-	ticker := time.NewTicker(50 * time.Millisecond)
+	go func(c *Cpu, mCyche <-chan int, stopChan, doneChan chan bool) {
 
-	go func(c *Cpu, stopChan, doneChan chan bool) {
+		defer func() {
+			doneChan <- true
+		}()
 
 		for {
 			select {
 			case <-stopChan:
-				ticker.Stop()
-				doneChan <- true
+				log.Println("JOYPAD STOPPED")
 				return
-			case <-ticker.C:
+			case <-mCycle:
 
 				// read joypad register
 				jp := c.memory.Read(PORT_JOYPAD)
@@ -85,12 +89,12 @@ func (j *Joypad) init() {
 						}
 
 						switch key {
-						case rl.KeyQ:
-							// start
-							jp &= 0xB
 						case rl.KeyW:
 							// select
 							jp &= 0x7
+						case rl.KeyQ:
+							// start
+							jp &= 0xB
 						case rl.KeyA:
 							// B
 							jp &= 0xD
@@ -124,8 +128,15 @@ func (j *Joypad) init() {
 						}
 					}
 				}
+
+				if jp&0xF != 0xF {
+					// request interrupt
+					iflag := c.memory.Read(INTERRUPT_FLAG)
+					iflag |= 0x10
+					c.memory.Write(INTERRUPT_FLAG, iflag)
+				}
 			}
 		}
 
-	}(j.c, j.stopChan, j.doneChan)
+	}(j.c, mCycle, j.stopChan, j.doneChan)
 }

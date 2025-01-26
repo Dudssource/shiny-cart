@@ -5,10 +5,10 @@ func op_ret(c *Cpu, _ uint8) {
 	// m-cycles = 4
 	c.requiredCycles = 4
 
-	c.sp--
-	lsb := c.stack[c.sp]
-	c.sp--
-	msb := c.stack[c.sp]
+	lsb := c.memory.Read(c.sp)
+	c.sp++
+	msb := c.memory.Read(c.sp)
+	c.sp++
 	c.pc = NewWord(msb, lsb)
 }
 
@@ -33,9 +33,9 @@ func op_ret_cond(c *Cpu, opcode uint8) {
 
 		c.requiredCycles = 5
 
-		lsb := c.stack[c.sp]
+		lsb := c.memory.Read(c.sp)
 		c.sp++
-		msb := c.stack[c.sp]
+		msb := c.memory.Read(c.sp)
 		c.sp++
 
 		c.pc = NewWord(msb, lsb)

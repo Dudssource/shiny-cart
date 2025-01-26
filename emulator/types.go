@@ -1,7 +1,7 @@
 package emulator
 
 type Memory struct {
-	mem [8192]uint8 // 8-bit address bus, 8kb memory
+	mem [65536]uint8 // 8-bit address bus, 64kb memory
 }
 
 func (m *Memory) Read(address Word) uint8 {

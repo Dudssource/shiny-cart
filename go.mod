@@ -3,7 +3,7 @@ module github.com/Dudssource/shiny-cart
 go 1.22.3
 
 require (
-	github.com/gen2brain/raylib-go/raylib v0.0.0-20250109172833-6dbba4f81a9b
+	github.com/gen2brain/raylib-go/raylib v0.0.0-20240524074310-a997a44fb95b
 	github.com/stretchr/testify v1.9.0
 )
 

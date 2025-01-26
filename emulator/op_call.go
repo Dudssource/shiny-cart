@@ -13,12 +13,10 @@ func op_call_imm16(c *Cpu, _ uint8) {
 	c.pc = NewWord(msb, lsb)
 
 	// store pc into stack
-	nn_msb := pc.High()
-	nn_lsb := pc.Low()
-	c.stack[c.sp] = nn_msb
-	c.sp++
-	c.stack[c.sp] = nn_lsb
-	c.sp++
+	c.sp--
+	c.memory.Write(c.sp, pc.High())
+	c.sp--
+	c.memory.Write(c.sp, pc.Low())
 }
 
 // https://rgbds.gbdev.io/docs/v0.8.0/gbz80.7#CALL_cc,n16
