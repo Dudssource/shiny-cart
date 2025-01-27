@@ -37,5 +37,7 @@ func main() {
 	}
 
 	// game Loop
-	g.Loop(*interval)
+	if err := g.Loop(*interval); err != nil {
+		panic(err)
+	}
 }

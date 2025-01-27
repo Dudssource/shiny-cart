@@ -14,7 +14,8 @@ type Mode string
 const (
 	INTERRUPT_ENABLE = Word(0xFFFF)
 	INTERRUPT_FLAG   = Word(0xFF0F)
-	CPU_START        = Word(0x0150)
+	// https://gbdev.io/pandocs/The_Cartridge_Header.html#0100-0103--entry-point
+	CPU_START = Word(0x0100)
 )
 
 const (

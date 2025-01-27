@@ -67,14 +67,14 @@ func (t *Timer) init(mCycle <-chan int) {
 			doneChan <- true
 		}()
 
-		lastDivValue := uint8(0)
+		lastDivValue := 0
 
 		for {
 			select {
 			case cycle := <-mCycle:
 
 				/* DIV REGISTER */
-				currentDivValue := c.memory.Read(PORT_DIV)
+				currentDivValue := int(c.memory.Read(PORT_DIV))
 				// some value was written to DIV or we had an overflow
 				if lastDivValue > 0 && lastDivValue != currentDivValue {
 					lastDivValue = 0
@@ -88,7 +88,7 @@ func (t *Timer) init(mCycle <-chan int) {
 					} else {
 						currentDivValue++
 						// increment DIV
-						c.memory.Write(PORT_DIV, currentDivValue)
+						c.memory.Write(PORT_DIV, uint8(currentDivValue))
 						lastDivValue = currentDivValue
 					}
 				}

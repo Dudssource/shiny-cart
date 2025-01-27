@@ -32,7 +32,7 @@ func NewGameBoy(debug, step bool) *GameBoy {
 	c := &Cpu{
 		step:   step,
 		debug:  debug,
-		memory: &Memory{},
+		memory: NewMemory(),
 	}
 
 	return &GameBoy{
@@ -63,9 +63,6 @@ func (g *GameBoy) Load(romFile string) error {
 		}
 
 		for _, b1 := range b {
-			if b1 > 0x0 && b1 != 0xFF {
-				log.Printf("mem[%X] = %X\n", start, b1)
-			}
 			g.c.memory.Write(Word(start), b1)
 			start++
 		}
@@ -73,10 +70,12 @@ func (g *GameBoy) Load(romFile string) error {
 }
 
 // Game Loop
-func (g *GameBoy) Loop(interval time.Duration) {
+func (g *GameBoy) Loop(interval time.Duration) error {
 
 	// init emulator
-	g.init()
+	if err := g.init(); err != nil {
+		return err
+	}
 
 	// machine cycle channel
 	// one cicle = 1us
@@ -113,10 +112,15 @@ func (g *GameBoy) Loop(interval time.Duration) {
 	rl.CloseWindow()
 
 	// force stop the emulator
-	g.stop()
+	return g.stop()
 }
 
-func (g *GameBoy) init() {
+func (g *GameBoy) init() error {
+
+	if err := g.c.memory.init(); err != nil {
+		return err
+	}
+
 	// init channels
 	g.cpuChan = make(chan int, 1)
 	g.joypadChan = make(chan int, 1)
@@ -127,6 +131,8 @@ func (g *GameBoy) init() {
 	g.c.init(g.cpuChan)
 	g.joypad.init(g.joypadChan)
 	g.timer.init(g.timerChan)
+
+	return nil
 }
 
 func (g *GameBoy) stop() error {

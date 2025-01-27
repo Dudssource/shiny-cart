@@ -1,17 +1,5 @@
 package emulator
 
-type Memory struct {
-	mem [65536]uint8 // 8-bit address bus, 64kb memory
-}
-
-func (m *Memory) Read(address Word) uint8 {
-	return m.mem[address]
-}
-
-func (m *Memory) Write(address Word, value uint8) {
-	m.mem[address] = value
-}
-
 type Word uint16
 
 func NewWord(hi uint8, lo uint8) Word {
