@@ -18,6 +18,8 @@ func main() {
 	file := flag.String("f", "", "ROM `file` location")
 	debug := flag.Bool("d", false, "Debug mode")
 	step := flag.Bool("s", false, "Step mode")
+	silent := flag.Bool("m", false, "Silent mode")
+	breakPoints := flag.String("b", "", "Break points")
 	interval := flag.Duration("t", 500*time.Millisecond, "Machine cycle interval")
 	flag.Parse()
 
@@ -29,7 +31,7 @@ func main() {
 	}
 
 	// emulator
-	g := emulator.NewGameBoy(*debug, *step)
+	g := emulator.NewGameBoy(*debug, *step, *silent, *breakPoints)
 
 	// load ROM
 	if err := g.Load(*file); err != nil {
