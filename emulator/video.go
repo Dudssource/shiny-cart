@@ -34,5 +34,5 @@ func (v *Video) init(width, height int32) {
 	}
 
 	rl.InitWindow(v.width, v.height, "GameBoy-DMG Emulator")
-	rl.SetTargetFPS(120)
+	rl.SetTargetFPS(60)
 }

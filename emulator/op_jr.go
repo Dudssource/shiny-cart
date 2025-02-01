@@ -1,5 +1,7 @@
 package emulator
 
+import "log"
+
 // https://rgbds.gbdev.io/docs/v0.7.0/gbz80.7#JR_n16
 func op_jr_imm8(c *Cpu, _ uint8) {
 
@@ -17,6 +19,10 @@ func op_jr_imm8(c *Cpu, _ uint8) {
 		c.pc -= Word(offset)
 	} else {
 		c.pc += Word(offset)
+	}
+
+	if c.debug {
+		log.Printf("JR %.8X\n", c.pc)
 	}
 }
 

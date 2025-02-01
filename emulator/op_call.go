@@ -1,5 +1,7 @@
 package emulator
 
+import "log"
+
 // https://rgbds.gbdev.io/docs/v0.7.0/gbz80.7#CALL_n16
 func op_call_imm16(c *Cpu, _ uint8) {
 
@@ -11,6 +13,10 @@ func op_call_imm16(c *Cpu, _ uint8) {
 	msb := c.fetch()
 	pc := c.pc
 	c.pc = NewWord(msb, lsb)
+
+	if c.debug {
+		log.Printf("CALL %.8X\n", c.pc)
+	}
 
 	// store pc into stack
 	c.sp--

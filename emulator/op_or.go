@@ -1,5 +1,7 @@
 package emulator
 
+import "log"
+
 // https://rgbds.gbdev.io/docs/v0.7.0/gbz80.7#OR_A,r8
 // https://rgbds.gbdev.io/docs/v0.7.0/gbz80.7#OR_A,_HL_
 func op_or_a_r8(c *Cpu, opcode uint8) {
@@ -22,6 +24,10 @@ func op_or_a_r8(c *Cpu, opcode uint8) {
 		// mem[HL]
 		nn = c.memory.Read(hl)
 
+		if c.debug {
+			log.Printf("OR [%.8X]\n", nn)
+		}
+
 	} else {
 
 		// m-cycles = 1
@@ -29,6 +35,10 @@ func op_or_a_r8(c *Cpu, opcode uint8) {
 
 		// nn = R8
 		nn = c.reg.r8(dst)
+
+		if c.debug {
+			log.Printf("OR %d\n", nn)
+		}
 	}
 
 	// OR A

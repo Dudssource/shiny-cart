@@ -1,10 +1,12 @@
 package emulator
 
 import (
+	"fmt"
 	"io"
 	"log"
 	"math"
 	"os"
+	"strings"
 	"time"
 
 	rl "github.com/gen2brain/raylib-go/raylib"
@@ -16,23 +18,18 @@ type GameBoy struct {
 	joypad *Joypad
 	timer  *Timer
 	video  *Video
-
-	// Channels
-	joypadChan chan int
-	cpuChan    chan int
-	timerChan  chan int
-
-	cycle int
 }
 
-func NewGameBoy(debug, step bool) *GameBoy {
+func NewGameBoy(debug, step, silent bool, breakPoints string) *GameBoy {
 	if step {
 		debug = true
 	}
 	c := &Cpu{
-		step:   step,
-		debug:  debug,
-		memory: NewMemory(),
+		step:        step,
+		silent:      silent,
+		breakPoints: strings.TrimSpace(breakPoints),
+		debug:       debug,
+		memory:      NewMemory(),
 	}
 
 	return &GameBoy{
@@ -51,7 +48,20 @@ func (g *GameBoy) Load(romFile string) error {
 	}
 	defer f.Close()
 
-	start := 0x0
+	stat, err := f.Stat()
+	if err != nil {
+		return err
+	}
+
+	if len(g.c.memory.mem) == 0 {
+		g.c.memory.mem = make(memoryArea, 65536)
+	}
+
+	if len(g.c.memory.rom) == 0 {
+		g.c.memory.rom = make(memoryArea, stat.Size())
+	}
+
+	address := 0x0
 	for {
 
 		b := make([]byte, 1)
@@ -62,9 +72,12 @@ func (g *GameBoy) Load(romFile string) error {
 			return err
 		}
 
-		for _, b1 := range b {
-			g.c.memory.Write(Word(start), b1)
-			start++
+		for _, value := range b {
+			if address < int(VRAM_START) {
+				g.c.memory.mem[address] = value
+			}
+			g.c.memory.rom[address] = value
+			address++
 		}
 	}
 }
@@ -77,42 +90,78 @@ func (g *GameBoy) Loop(interval time.Duration) error {
 		return err
 	}
 
-	// machine cycle channel
-	// one cicle = 1us
-	mCycle := time.NewTicker(interval)
+	stop := make(chan byte, 1)
+	fps := make(chan byte, 1)
 
-	stopChan := make(chan bool, 1)
+	go func(g *GameBoy, fps, stop chan byte) {
 
-	go func(g *GameBoy, stopChan <-chan bool) {
+		defer func() {
+			stop <- 0x0
+		}()
+
+		totalCycles := 0
+
 		for {
 			select {
-			case <-stopChan:
+			case <-stop:
 				return
+			case <-fps:
+				cycle := 0
 
-			case <-mCycle.C:
+				for cycle < 17476 {
 
-				// broadcast machine cycle
-				g.broadcast()
+					// broadcast machine cycle
+					g.broadcast(totalCycles)
+
+					if g.c.stopped {
+						return
+					}
+
+					// overflow internal m-cycle counter, reset
+					if totalCycles+1 > math.MaxInt32 {
+						totalCycles = 0
+					} else {
+						totalCycles++
+					}
+
+					cycle++
+
+					if rl.IsKeyPressed(rl.KeyP) {
+						g.c.step = true
+					}
+				}
 			}
 		}
-	}(g, stopChan)
+	}(g, fps, stop)
 
 	// block
 	for !rl.WindowShouldClose() && !g.c.stopped {
+
+		if len(fps) == 0 {
+			fps <- 0x0
+		}
+
 		// emulate raylib event loop
 		g.video.Draw([]byte{}, 0, 0, false)
 	}
 
-	log.Println("STOPPING")
-
-	// stop mCycle
-	mCycle.Stop()
+	if !g.c.stopped {
+		log.Println("STOPPING")
+		stop <- 0x0
+		timeout := time.After(time.Second)
+		select {
+		case <-stop:
+			log.Println("Cpu m-clycle emulator stopped")
+		case <-timeout:
+			return fmt.Errorf("timedout after waiting %s waiting for cpu m-cycle emulator to stop", time.Second.String())
+		}
+	}
 
 	// close window
 	rl.CloseWindow()
 
 	// force stop the emulator
-	return g.stop()
+	return nil
 }
 
 func (g *GameBoy) init() error {
@@ -121,54 +170,19 @@ func (g *GameBoy) init() error {
 		return err
 	}
 
-	// init channels
-	g.cpuChan = make(chan int, 1)
-	g.joypadChan = make(chan int, 1)
-	g.timerChan = make(chan int, 1)
-
 	// init handlers
 	g.video.init(512, 256)
-	g.c.init(g.cpuChan)
-	g.joypad.init(g.joypadChan)
-	g.timer.init(g.timerChan)
+	if err := g.c.init(); err != nil {
+		return err
+	}
+	g.joypad.init()
+	g.timer.init()
 
 	return nil
 }
 
-func (g *GameBoy) stop() error {
-	// close joypad
-	if err := g.joypad.stop(); err != nil {
-		return err
-	}
-	// close timer
-	if err := g.timer.stop(); err != nil {
-		return err
-	}
-	if !g.c.stopped {
-		// close cpu
-		if err := g.c.stop(); err != nil {
-			return err
-		}
-	}
-	// close channels
-	close(g.joypadChan)
-	close(g.timerChan)
-	close(g.cpuChan)
-
-	// no errors
-	return nil
-}
-
-func (g *GameBoy) broadcast() {
-
-	// overflow internal m-cycle counter, reset
-	if g.cycle+1 > math.MaxInt32 {
-		g.cycle = 0
-	} else {
-		g.cycle++
-	}
-
-	g.joypadChan <- g.cycle
-	g.timerChan <- g.cycle
-	g.cpuChan <- g.cycle
+func (g *GameBoy) broadcast(cycle int) {
+	g.joypad.sync(cycle)
+	g.timer.sync(cycle)
+	g.c.sync(cycle)
 }

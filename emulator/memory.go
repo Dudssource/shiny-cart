@@ -12,10 +12,11 @@ const (
 	VRAM_END   = Word(0x9FFF)
 )
 
-type memoryArea [65536]uint8
+type memoryArea []uint8
 
 type Memory struct {
 	mem memoryArea // 8-bit address bus, 64kb memory
+	rom memoryArea // ROM area
 	mbc *Mbc
 }
 
@@ -29,7 +30,7 @@ func (m *Memory) Read(address Word) uint8 {
 
 	// intercept ROM and RAM memory reads
 	if m.mbc.initialized() && ownedByMBC(address) {
-		return m.mbc.controller.Read(m.mem, address)
+		return m.mbc.controller.Read(m.rom, address)
 	}
 
 	return m.mem[address]
@@ -39,7 +40,7 @@ func (m *Memory) Write(address Word, value uint8) {
 
 	// intercepts ROM and RAM memory writes
 	if m.mbc.initialized() && ownedByMBC(address) {
-		m.mbc.controller.Write(m.mem, address, value)
+		m.mbc.controller.Write(m.rom, address, value)
 		return
 	}
 

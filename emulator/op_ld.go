@@ -1,5 +1,7 @@
 package emulator
 
+import "log"
+
 // https://rgbds.gbdev.io/docs/v0.7.0/gbz80.7#LD_r8,r8
 // https://rgbds.gbdev.io/docs/v0.7.0/gbz80.7#LD_r8,_HL_
 // https://rgbds.gbdev.io/docs/v0.7.0/gbz80.7#LD__HL_,r8
@@ -20,6 +22,10 @@ func op_ld_r8_r8(c *Cpu, opcode uint8) {
 		// LD [hl], r8
 		c.memory.Write(c.reg.r16(reg_hl), c.reg.r8(src))
 
+		if c.debug {
+			log.Printf("LOAD [%.8X], %d\n", c.reg.r16(reg_hl), c.reg.r8(src))
+		}
+
 		return
 	}
 
@@ -32,6 +38,10 @@ func op_ld_r8_r8(c *Cpu, opcode uint8) {
 		// LD dst, [hl]
 		c.reg.w8(dst, c.memory.Read(c.reg.r16(reg_hl)))
 
+		if c.debug {
+			log.Printf("LOAD %d, [%.8X]\n", dst, c.reg.r16(reg_hl))
+		}
+
 	} else {
 
 		// m-cycles=1
@@ -39,6 +49,10 @@ func op_ld_r8_r8(c *Cpu, opcode uint8) {
 
 		// LD dst, src
 		c.reg.w8(dst, c.reg.r8(src))
+
+		if c.debug {
+			log.Printf("LOAD %d, %d\n", dst, src)
+		}
 	}
 }
 
@@ -51,8 +65,30 @@ func op_ld_r8_imm8(c *Cpu, opcode uint8) {
 	// 0b00111000
 	dst := (opcode & 0x38) >> 3
 
+	val := c.fetch()
+
+	// dst == [hl]
+	if dst == reg_indirect_hl {
+
+		// m-cycles=3
+		c.requiredCycles = 3
+
+		// LD [hl], imm8
+		c.memory.Write(c.reg.r16(reg_hl), val)
+
+		if c.debug {
+			log.Printf("LD [%.8X], %d\n", c.reg.r16(reg_hl), val)
+		}
+
+		return
+	}
+
+	if c.debug {
+		log.Printf("LD %d, [%d]\n", dst, val)
+	}
+
 	// LD r8, imm8
-	c.reg.w8(dst, c.fetch())
+	c.reg.w8(dst, val)
 }
 
 // https://rgbds.gbdev.io/docs/v0.7.0/gbz80.7#LD_r16,n16
@@ -68,6 +104,10 @@ func op_ld_r16_imm16(c *Cpu, opcode uint8) {
 
 	// 0b00110000
 	dst := (opcode & 0x30) >> 4
+
+	if c.debug {
+		log.Printf("LD %d, %.8X\n", dst, NewWord(hi, lo))
+	}
 
 	// LD r16, imm16
 	c.reg.w16(dst, NewWord(hi, lo))

@@ -1,11 +1,6 @@
 package emulator
 
 import (
-	"fmt"
-	"log"
-	"sync"
-	"time"
-
 	rl "github.com/gen2brain/raylib-go/raylib"
 )
 
@@ -14,129 +9,90 @@ const (
 )
 
 type Joypad struct {
-	c        *Cpu
-	mu       *sync.Mutex
-	stopChan chan bool
-	doneChan chan bool
+	c *Cpu
 }
 
 func NewJoypad(c *Cpu) *Joypad {
 	return &Joypad{
-		c:        c,
-		mu:       &sync.Mutex{},
-		stopChan: make(chan bool),
-		doneChan: make(chan bool),
+		c: c,
 	}
 }
 
-func (j *Joypad) stop() error {
-	// ask to stop
-	j.stopChan <- true
-	// specifies a timeout
-	timeout := time.NewTimer(time.Second)
+func (j *Joypad) sync(_ int) {
 
-	select {
-	// wait until Joypad stops
-	case <-j.doneChan:
-		// close channels
-		close(j.stopChan)
-		close(j.doneChan)
-		return nil
-	case <-timeout.C:
-		timeout.Stop()
-		return fmt.Errorf("joypad timedout after 1s to finish")
+	// read joypad register
+	jp := j.c.memory.Read(PORT_JOYPAD)
+
+	// no buttons selected
+	if jp == 0x30 {
+		// all keys released
+		j.c.memory.Write(PORT_JOYPAD, 0x3F)
+		// proceed
+		return
 	}
-}
 
-func (j *Joypad) init(mCycle <-chan int) {
+	// unset the lowest nibbles (for game boy, 0 means key pressed)
+	jp |= 0xF
 
-	// no button selected, all keys released
-	j.c.memory.Write(PORT_JOYPAD, 0x3F)
-
-	go func(c *Cpu, mCyche <-chan int, stopChan, doneChan chan bool) {
-
-		defer func() {
-			doneChan <- true
-		}()
-
+	// check if select buttons
+	if jp&0x20 == 0x0 {
 		for {
-			select {
-			case <-stopChan:
-				log.Println("JOYPAD STOPPED")
-				return
-			case <-mCycle:
+			key := rl.GetKeyPressed()
+			if key == 0 {
+				break
+			}
 
-				// read joypad register
-				jp := c.memory.Read(PORT_JOYPAD)
-
-				// no buttons selected
-				if jp == 0x30 {
-					// all keys released
-					c.memory.Write(PORT_JOYPAD, 0x3F)
-					// proceed
-					continue
-				}
-
-				// unset the lowest nibbles (for game boy, 0 means key pressed)
-				jp |= 0xF
-
-				// check if select buttons
-				if jp&0x20 == 0x0 {
-					for {
-						key := rl.GetKeyPressed()
-						if key == 0 {
-							break
-						}
-
-						switch key {
-						case rl.KeyW:
-							// select
-							jp &= 0x7
-						case rl.KeyQ:
-							// start
-							jp &= 0xB
-						case rl.KeyA:
-							// B
-							jp &= 0xD
-						case rl.KeyS:
-							// A
-							jp &= 0xE
-						}
-					}
-
-					// directional
-				} else if jp&0x10 == 0x0 {
-					for {
-						key := rl.GetKeyPressed()
-						if key == 0 {
-							break
-						}
-
-						switch key {
-						case rl.KeyDown:
-							// down
-							jp &= 0x7
-						case rl.KeyUp:
-							// up
-							jp &= 0xB
-						case rl.KeyLeft:
-							// left
-							jp &= 0xD
-						case rl.KeyRight:
-							// right
-							jp &= 0xE
-						}
-					}
-				}
-
-				if jp&0xF != 0xF {
-					// request interrupt
-					iflag := c.memory.Read(INTERRUPT_FLAG)
-					iflag |= 0x10
-					c.memory.Write(INTERRUPT_FLAG, iflag)
-				}
+			switch key {
+			case rl.KeyW:
+				// select
+				jp &= 0x7
+			case rl.KeyQ:
+				// start
+				jp &= 0xB
+			case rl.KeyA:
+				// B
+				jp &= 0xD
+			case rl.KeyS:
+				// A
+				jp &= 0xE
 			}
 		}
 
-	}(j.c, mCycle, j.stopChan, j.doneChan)
+		// directional
+	} else if jp&0x10 == 0x0 {
+		for {
+			key := rl.GetKeyPressed()
+			if key == 0 {
+				break
+			}
+
+			switch key {
+			case rl.KeyDown:
+				// down
+				jp &= 0x7
+			case rl.KeyUp:
+				// up
+				jp &= 0xB
+			case rl.KeyLeft:
+				// left
+				jp &= 0xD
+			case rl.KeyRight:
+				// right
+				jp &= 0xE
+			}
+		}
+	}
+
+	if jp&0xF != 0xF {
+		// request interrupt
+		iflag := j.c.memory.Read(INTERRUPT_FLAG)
+		iflag |= 0x10
+		j.c.memory.Write(INTERRUPT_FLAG, iflag)
+	}
+}
+
+func (j *Joypad) init() {
+
+	// no button selected, all keys released
+	j.c.memory.Write(PORT_JOYPAD, 0x3F)
 }

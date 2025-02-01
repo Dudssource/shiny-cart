@@ -1,6 +1,9 @@
 package emulator
 
-import "fmt"
+import (
+	"fmt"
+	"log"
+)
 
 const (
 	// https://gbdev.io/pandocs/The_Cartridge_Header.html#0147--cartridge-type
@@ -93,15 +96,16 @@ var (
 	}
 
 	mbcControllerMap = map[int]memoryController{
-		MBC1:             &mbc1{},
-		MBC1_RAM:         &mbc1{ramSupport: true},
-		MBC1_RAM_BATTERY: &mbc1{ramSupport: true, batterySupport: true},
+		MBC1:             &mbc1{romSelected: 0x1, name: "MBC1"},
+		MBC1_RAM:         &mbc1{ramSupport: true, romSelected: 0x1, name: "MBC1_RAM"},
+		MBC1_RAM_BATTERY: &mbc1{ramSupport: true, batterySupport: true, romSelected: 0x1, name: "MBC1_RAM_BATTERY"},
 	}
 )
 
 type memoryController interface {
 	Write(area memoryArea, address Word, value uint8)
 	Read(area memoryArea, address Word) uint8
+	Name() string
 }
 
 type Mbc struct {
@@ -126,6 +130,9 @@ func (m *Mbc) detectType(mem memoryArea) error {
 	if !ok {
 		return fmt.Errorf("not supported cartridge type %X", cartridgeType)
 	}
+
+	log.Printf("Detected cartdrige type %s\n", controller.Name())
+
 	m.controller = controller
 	m.mem = mem
 	return nil

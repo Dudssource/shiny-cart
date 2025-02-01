@@ -1,13 +1,18 @@
 package emulator
 
 import (
+	_ "embed"
+	"encoding/json"
 	"fmt"
 	"log"
+	"strconv"
 	"strings"
-	"time"
 
 	rl "github.com/gen2brain/raylib-go/raylib"
 )
+
+//go:embed opcodes.json
+var opcodesFile []byte
 
 type Mode string
 
@@ -34,13 +39,22 @@ const (
 	AGS  Mode = "AGS"
 )
 
+// Opcodes used for debugging purposes
+type Opcodes struct {
+	Unprefixed map[string]json.RawMessage `json:"unprefixed"`
+	Cbprefixed map[string]json.RawMessage `json:"cbprefixed"`
+}
+
 type Cpu struct {
-	memory *Memory // 8-bit address bus, 8kb memory
+	memory *Memory // 8-bit address bus
 
 	pc Word // program counter
 	sp Word // stack pointer
 
 	ime uint8 // interrupt master enable
+
+	remainingCycles int
+	opcode          uint8
 
 	requiredCycles int
 
@@ -50,9 +64,13 @@ type Cpu struct {
 	doneChan chan bool
 	stopChan chan bool
 
-	debug   bool
-	step    bool
-	stopped bool
+	debug       bool
+	step        bool
+	stopped     bool
+	breakPoints string
+	cbprefixed  bool
+	silent      bool
+	opcodes     *Opcodes
 }
 
 func (c *Cpu) fetch() uint8 {
@@ -76,6 +94,9 @@ func (c *Cpu) setup(mode Mode) {
 }
 
 func (c *Cpu) decode(opcode uint8) (instruction, string) {
+
+	// reset
+	c.cbprefixed = false
 
 	if opcode == 0x0 {
 		// https://rgbds.gbdev.io/docs/v0.7.0/gbz80.7#NOP
@@ -107,8 +128,10 @@ func (c *Cpu) decode(opcode uint8) (instruction, string) {
 			// ld a, [r16mem]
 			return op_ld_a_r16mem, "ld a, [r16mem]"
 		case 0x8:
-			// ld [imm16], sp
-			return op_ld_imm16_mem_sp, "ld [imm16], sp"
+			if opcode&0xF0 == 0 {
+				// ld [imm16], sp
+				return op_ld_imm16_mem_sp, "ld [imm16], sp"
+			}
 		case 0x3:
 			// incr r16
 			return op_inc_r16, "incr r16"
@@ -250,8 +273,11 @@ func (c *Cpu) decode(opcode uint8) (instruction, string) {
 			return op_ret, "ret"
 		case 0xCB:
 			// CB prefixed
+			c.cbprefixed = true
+
 			// https://gbdev.io/pandocs/CPU_Instruction_Set.html#cb-prefix-instructions
 			prefix := c.fetch()
+			c.opcode = prefix
 
 			switch prefix & 0xF8 {
 			case 0x0:
@@ -274,7 +300,7 @@ func (c *Cpu) decode(opcode uint8) (instruction, string) {
 				return op_swap_r8, "CB swap r8"
 			}
 
-			switch prefix & 0xC0 {
+			switch (prefix & 0xC0) >> 6 {
 			case 0x1:
 				// bit b3, r8
 				return op_bit_r8, "CB bit b3, r8"
@@ -381,25 +407,6 @@ func (c *Cpu) decode(opcode uint8) (instruction, string) {
 
 	// default is nop, might check for errors later
 	return op_nop, "unknown nop"
-}
-
-func (c *Cpu) stop() error {
-	// ask to stop
-	c.stopChan <- true
-	// specifies a timeout
-	timeout := time.NewTimer(time.Second)
-
-	select {
-	// wait until Joypad stops
-	case <-c.doneChan:
-		// close channels
-		close(c.stopChan)
-		close(c.doneChan)
-		return nil
-	case <-timeout.C:
-		timeout.Stop()
-		return fmt.Errorf("cpu timedout after 1s to finish")
-	}
 }
 
 func (c *Cpu) pushPCIntoStack() {
@@ -521,136 +528,189 @@ func (c *Cpu) interruptRequested() bool {
 	return requested
 }
 
-func (c *Cpu) init(mCycle <-chan int) {
+func (c *Cpu) sync(cycle int) {
+	// if no opcode was read cycles is 0 (first cycle) or 1 (parallel fetch)
+	if c.opcode == 0 && c.remainingCycles <= 1 {
+
+		// Interrupts are accepted during the op code fetch cycle of each instruction
+		if c.interruptRequested() {
+
+			// how many cycles for instruction
+			c.remainingCycles = c.requiredCycles
+
+			log.Printf("INTERRUPT PC=%X SP=%X IME=%d\n", c.pc, c.sp, c.ime)
+
+			// nop
+			return
+		}
+
+		// fetch opcode from memory
+		c.opcode = c.fetch()
+
+		// we should spend 1 machine cycle during read
+		c.remainingCycles = 1
+	}
+
+	// if opcode is 0, it means that we should not execute, otherwise, it means
+	// that a cycle was spent fetching and now we should execute.
+	// also we will only proceed after the number of required cycles
+	// is passed (equals to 0)
+	if c.opcode > 0 && c.remainingCycles == 0 {
+
+		// decode - calculate how many cycles per instruction
+		is, operation := c.decode(uint8(c.opcode))
+
+		if c.debug || operation == "unknown nop" {
+			if c.cbprefixed {
+				op, ok := c.opcodes.Cbprefixed[fmt.Sprintf("0x%.2X", c.opcode)]
+				if ok {
+					log.Printf("CB %s", string(op))
+				}
+			} else {
+				op, ok := c.opcodes.Unprefixed[fmt.Sprintf("0x%.2X", c.opcode)]
+				if ok {
+					log.Printf("%s", string(op))
+				}
+			}
+			if operation == "unknown nop" {
+				c.step = true
+			}
+		}
+
+		if c.shouldStep() {
+			var sb strings.Builder
+			sb.WriteString("STEP BEFORE\n")
+			sb.WriteString("*********************************\n")
+
+			sb.WriteString(fmt.Sprintf("\tOP (val=%X bit=%.8b name=%s) \n\tPC=%X\n\tSP=%X\n\tIME=%d\n", c.opcode, c.opcode, operation, c.pc, c.sp, c.ime))
+
+			sb.WriteString(fmt.Sprintf("\tREG_B=%X\n\tREG_C=%X\n\tREG_D=%X\n\tREG_E=%X\n\tREG_H=%X\n\tREG_L=%X\n\tREG_A=%X\n\tREG_F=%X\n", c.reg.r8(reg_b), c.reg.r8(reg_c), c.reg.r8(reg_d), c.reg.r8(reg_e), c.reg.r8(reg_h), c.reg.r8(reg_l), c.reg.r8(reg_a), c.reg.r8(reg_f)))
+
+			sb.WriteString(fmt.Sprintf("\tREG_BC=%X\n\tREG_DE=%X\n\tREG_HL=%X\n\tREG_SP=%X\n", c.reg.r16(reg_bc), c.reg.r16(reg_de), c.reg.r16(reg_hl), c.reg.r16(reg_sp)))
+
+			sb.WriteString(fmt.Sprintf("\tZ_FLAG=%d\n\tN_FLAG=%d\n\tC_FLAG=%d\n\tH_FLAG=%d\n", c.reg.r_flags()&z_flag, c.reg.r_flags()&n_flag, c.reg.r_flags()&c_flag, c.reg.r_flags()&h_flag))
+
+			sb.WriteString("*********************************\n")
+
+			log.Print(sb.String())
+
+			switch c.waitStep() {
+			case STEP_QUIT:
+				c.stopped = true
+				return
+			case STEP_RESUME:
+				c.step = false
+			}
+		}
+
+		// execute
+		is(c, c.opcode)
+
+		// how many cycles for instruction
+		c.remainingCycles = c.requiredCycles
+
+		if c.shouldStep() {
+			var sb strings.Builder
+			sb.WriteString("STEP AFTER\n")
+			sb.WriteString("*********************************\n")
+
+			sb.WriteString(fmt.Sprintf("\tOP (val=%X bit=%.8b name=%s) \n\tPC=%X\n\tSP=%X\n\tIME=%d\n", c.opcode, c.opcode, operation, c.pc, c.sp, c.ime))
+
+			sb.WriteString(fmt.Sprintf("\tREG_B=%X\n\tREG_C=%X\n\tREG_D=%X\n\tREG_E=%X\n\tREG_H=%X\n\tREG_L=%X\n\tREG_A=%X\n\tREG_F=%X\n", c.reg.r8(reg_b), c.reg.r8(reg_c), c.reg.r8(reg_d), c.reg.r8(reg_e), c.reg.r8(reg_h), c.reg.r8(reg_l), c.reg.r8(reg_a), c.reg.r8(reg_f)))
+
+			sb.WriteString(fmt.Sprintf("\tREG_BC=%X\n\tREG_DE=%X\n\tREG_HL=%X\n\tREG_SP=%X\n", c.reg.r16(reg_bc), c.reg.r16(reg_de), c.reg.r16(reg_hl), c.reg.r16(reg_sp)))
+
+			sb.WriteString(fmt.Sprintf("\tZ_FLAG=%d\n\tN_FLAG=%d\n\tC_FLAG=%d\n\tH_FLAG=%d\n", c.reg.r_flags()&z_flag, c.reg.r_flags()&n_flag, c.reg.r_flags()&c_flag, c.reg.r_flags()&h_flag))
+
+			sb.WriteString("*********************************\n")
+
+			log.Print(sb.String())
+
+			switch c.waitStep() {
+			case STEP_QUIT:
+				return
+			case STEP_RESUME:
+				c.step = false
+			}
+		} else if !c.silent {
+			log.Printf("OP (val=%X bit=%.8b name=%s) CYCLE=%d REMAINING=%d PC=%X SP=%X IME=%d HL=%X\n", c.opcode, c.opcode, operation, cycle, c.remainingCycles, c.pc, c.sp, c.ime, c.reg.r16(reg_hl))
+		}
+
+		if operation == "stop" {
+			log.Println("STOP INSTRUCTION RECEIVED")
+			return
+		}
+
+		// reset opcode
+		c.opcode = 0x0
+	}
+
+	// decrease the number of cycles
+	c.remainingCycles--
+}
+
+func (c *Cpu) init() error {
 
 	// init classic game-boy
 	c.setup(CGB)
 	c.stopChan = make(chan bool, 1)
 	c.doneChan = make(chan bool)
 
-	ops := 0
+	var opcodes Opcodes
+	if err := json.Unmarshal(opcodesFile, &opcodes); err != nil {
+		return err
+	}
+	c.opcodes = &opcodes
+	return nil
+}
 
-	go func(c *Cpu, mCycle <-chan int, stopChan <-chan bool, doneChan chan<- bool) {
-		defer func() {
-			log.Println("CPU STOPPED")
-			c.stopped = true
-			doneChan <- true
-		}()
-		var (
-			remainingCycles int
-			opcode          uint8
-		)
-		for {
-			select {
-			case <-stopChan:
-				// force stop the cpu
-				return
-			case cycle := <-mCycle:
+func (c *Cpu) shouldStep() bool {
 
-				// if no opcode was read cycles is 0 (first cycle) or 1 (parallel fetch)
-				if opcode == 0 && remainingCycles <= 1 {
+	if c.step {
+		return true
+	}
 
-					// Interrupts are accepted during the op code fetch cycle of each instruction
-					if c.interruptRequested() {
+	bg := strings.TrimSpace(c.breakPoints)
+	if !c.step && bg == "" {
+		return false
+	}
 
-						// how many cycles for instruction
-						remainingCycles = c.requiredCycles
+	for _, instruction := range strings.Split(bg, " ") {
 
-						log.Printf("INTERRUPT PC=%X SP=%X IME=%d\n", c.pc, c.sp, c.ime)
-
-						// nop
-						continue
-					}
-
-					// fetch opcode from memory
-					opcode = c.fetch()
-
-					// we should spend 1 machine cycle during read
-					remainingCycles = 1
-				}
-
-				// if opcode is 0, it means that we should not execute, otherwise, it means
-				// that a cycle was spent fetching and now we should execute.
-				// also we will only proceed after the number of required cycles
-				// is passed (equals to 0)
-				if opcode > 0 && remainingCycles == 0 {
-
-					// decode - calculate how many cycles per instruction
-					is, operation := c.decode(uint8(opcode))
-
-					if c.debug {
-						var sb strings.Builder
-						sb.WriteString("STEP BEFORE\n")
-						sb.WriteString("*********************************\n")
-						sb.WriteString(fmt.Sprintf("\tOP (val=%X bit=%.8b name=%s) \n\tPC=%X\n\tSP=%X\n\tIME=%d\n", opcode, opcode, operation, c.pc, c.sp, c.ime))
-						sb.WriteString(fmt.Sprintf("\tREG_B=%X\n\tREG_C=%X\n\tREG_D=%X\n\tREG_E=%X\n\tREG_H=%X\n\tREG_L=%X\n\tREG_A=%X\n\tREG_F=%X\n", c.reg.r8(reg_b), c.reg.r8(reg_c), c.reg.r8(reg_d), c.reg.r8(reg_e), c.reg.r8(reg_h), c.reg.r8(reg_l), c.reg.r8(reg_a), c.reg.r8(reg_f)))
-						sb.WriteString(fmt.Sprintf("\tREG_BC=%X\n\tREG_DE=%X\n\tREG_HL=%X\n\tREG_SP=%X\n", c.reg.r8(reg_bc), c.reg.r8(reg_de), c.reg.r8(reg_hl), c.reg.r8(reg_sp)))
-						sb.WriteString("*********************************\n")
-
-						log.Print(sb.String())
-
-						switch c.waitStep() {
-						case STEP_QUIT:
-							return
-						case STEP_RESUME:
-							c.step = false
-						}
-					}
-
-					// execute
-					is(c, opcode)
-
-					// how many cycles for instruction
-					remainingCycles = c.requiredCycles
-
-					if c.debug {
-						var sb strings.Builder
-						sb.WriteString("STEP AFTER\n")
-						sb.WriteString("*********************************\n")
-						sb.WriteString(fmt.Sprintf("\tOP (val=%X bit=%.8b name=%s) \n\tPC=%X\n\tSP=%X\n\tIME=%d\n", opcode, opcode, operation, c.pc, c.sp, c.ime))
-						sb.WriteString(fmt.Sprintf("\tREG_B=%X\n\tREG_C=%X\n\tREG_D=%X\n\tREG_E=%X\n\tREG_H=%X\n\tREG_L=%X\n\tREG_A=%X\n\tREG_F=%X\n", c.reg.r8(reg_b), c.reg.r8(reg_c), c.reg.r8(reg_d), c.reg.r8(reg_e), c.reg.r8(reg_h), c.reg.r8(reg_l), c.reg.r8(reg_a), c.reg.r8(reg_f)))
-						sb.WriteString(fmt.Sprintf("\tREG_BC=%X\n\tREG_DE=%X\n\tREG_HL=%X\n\tREG_SP=%X\n", c.reg.r8(reg_bc), c.reg.r8(reg_de), c.reg.r8(reg_hl), c.reg.r8(reg_sp)))
-						sb.WriteString("*********************************\n")
-
-						log.Print(sb.String())
-
-						switch c.waitStep() {
-						case STEP_QUIT:
-							return
-						case STEP_RESUME:
-							c.step = false
-						}
-					} else {
-						log.Printf("OP (val=%X bit=%.8b name=%s) CYCLE=%d REMAINING=%d PC=%X SP=%X IME=%d\n", opcode, opcode, operation, cycle, remainingCycles, c.pc, c.sp, c.ime)
-					}
-
-					if operation == "stop" {
-						log.Println("STOP INSTRUCTION RECEIVED")
-						return
-					}
-
-					// reset opcode
-					opcode = 0x0
-				}
-
-				// clock observability
-				ops++
-
-				// decrease the number of cycles
-				remainingCycles--
-			}
+		parts := strings.SplitN(instruction, "=", 2)
+		if len(parts) != 2 {
+			continue
 		}
-	}(c, mCycle, c.stopChan, c.doneChan)
+
+		switch parts[0] {
+		case "PC":
+			n, err := strconv.ParseInt(parts[1], 16, 32)
+			if err != nil {
+				log.Printf("Invalid instruction filter syntax : %s\n", err.Error())
+			}
+			match := c.pc == Word(n)
+			if match {
+				c.breakPoints = strings.Replace(c.breakPoints, instruction, "", 1)
+				c.step = true
+			}
+			return match
+		}
+	}
+
+	return false
 }
 
 func (c *Cpu) waitStep() int {
 	for {
+
 		key := rl.GetKeyPressed()
 		if key == 0 {
 			continue
 		}
 
 		switch key {
+		case rl.KeyD:
+			c.debug = !c.debug
 		case rl.KeyEscape:
 		case rl.KeyQ:
 			return STEP_QUIT
