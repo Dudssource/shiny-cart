@@ -1,5 +1,7 @@
 package emulator
 
+import "log"
+
 // https://rgbds.gbdev.io/docs/v0.7.0/gbz80.7#RET
 func op_ret(c *Cpu, _ uint8) {
 	// m-cycles = 4
@@ -19,6 +21,8 @@ func op_reti(c *Cpu, opcode uint8) {
 
 	// enable interrupts
 	c.ime = 1
+
+	log.Println("DISABLE RETI")
 }
 
 // https://rgbds.gbdev.io/docs/v0.7.0/gbz80.7#RET_cc

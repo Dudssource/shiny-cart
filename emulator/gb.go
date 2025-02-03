@@ -20,7 +20,7 @@ type GameBoy struct {
 	video  *Video
 }
 
-func NewGameBoy(debug, step, silent bool, breakPoints string) *GameBoy {
+func NewGameBoy(debug, step, silent, profiling bool, breakPoints string) *GameBoy {
 	if step {
 		debug = true
 	}
@@ -29,6 +29,7 @@ func NewGameBoy(debug, step, silent bool, breakPoints string) *GameBoy {
 		silent:      silent,
 		breakPoints: strings.TrimSpace(breakPoints),
 		debug:       debug,
+		profiling:   profiling,
 		memory:      NewMemory(),
 	}
 
@@ -101,17 +102,37 @@ func (g *GameBoy) Loop(interval time.Duration) error {
 
 		totalCycles := 0
 
+		start := time.Now()
+		cyclesPerSecond := 0
+		ticks := 0
+
 		for {
 			select {
 			case <-stop:
 				return
 			case <-fps:
-				cycle := 0
 
-				for cycle < 17476 {
+				for range 17476 {
 
 					// broadcast machine cycle
 					g.broadcast(totalCycles)
+
+					// 4Mihz (t-cycles) = 1 Mihz (m-cycles) == 1ms
+					if totalCycles%1048 == 0 {
+						ticks++
+						// used for tshoot and profiling
+						if ticks == 1000 {
+							if g.c.profiling {
+								log.Println("Tick RTC after 1s")
+							}
+							ticks = 0
+						}
+
+						if g.c.memory.mbc.initialized() {
+							// RTC tick (if supported by cartridge)
+							g.c.memory.mbc.controller.Tick()
+						}
+					}
 
 					if g.c.stopped {
 						return
@@ -124,7 +145,14 @@ func (g *GameBoy) Loop(interval time.Duration) error {
 						totalCycles++
 					}
 
-					cycle++
+					if time.Since(start).Seconds() >= 1 {
+						if g.c.profiling {
+							log.Printf("M-cycles per second %d\n", cyclesPerSecond)
+						}
+						cyclesPerSecond = 0
+						start = time.Now()
+					}
+					cyclesPerSecond++
 
 					if rl.IsKeyPressed(rl.KeyP) {
 						g.c.step = true

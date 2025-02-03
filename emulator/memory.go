@@ -12,6 +12,11 @@ const (
 	VRAM_END   = Word(0x9FFF)
 )
 
+const (
+	SERIAL_TRANSFER_SB = 0xFF01
+	SERIAL_TRANSFER_SC = 0xFF02
+)
+
 type memoryArea []uint8
 
 type Memory struct {

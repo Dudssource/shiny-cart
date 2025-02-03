@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
+	"runtime/debug"
 	"strconv"
 	"strings"
 
@@ -56,16 +57,15 @@ type Cpu struct {
 	remainingCycles int
 	opcode          uint8
 
-	requiredCycles int
+	requiredCycles  int
+	scheduledSerial int
 
 	// general purpose register pairs
 	reg Registers
 
-	doneChan chan bool
-	stopChan chan bool
-
 	debug       bool
 	step        bool
+	profiling   bool
 	stopped     bool
 	breakPoints string
 	cbprefixed  bool
@@ -116,6 +116,7 @@ func (c *Cpu) decode(opcode uint8) (instruction, string) {
 		if c.debug {
 			log.Println("BLOCK 0")
 		}
+
 		// mask by 1111 to check the rightmost nibble (four bits)
 		switch opcode & 0xF {
 		case 0x1:
@@ -213,6 +214,8 @@ func (c *Cpu) decode(opcode uint8) (instruction, string) {
 		case 0x36:
 			// halt
 			// https://gbdev.io/pandocs/halt.html#halt
+			return op_halt, "op_halt"
+
 		default:
 			// ld r8, r8
 			return op_ld_r8_r8, "ld r8, r8"
@@ -286,6 +289,9 @@ func (c *Cpu) decode(opcode uint8) (instruction, string) {
 			case 0x1:
 				// rrc r8
 				return op_rrc_r8, "CB rrc r8"
+			case 0x2:
+				// rl r8
+				return op_rl_r8, "CB rl r8"
 			case 0x3:
 				// rr r8
 				return op_rr_r8, "CB rr r8"
@@ -298,6 +304,9 @@ func (c *Cpu) decode(opcode uint8) (instruction, string) {
 			case 0x6:
 				// swap r8
 				return op_swap_r8, "CB swap r8"
+			case 0x7:
+				// srl r8
+				return op_srl_r8, "CB srl r8"
 			}
 
 			switch (prefix & 0xC0) >> 6 {
@@ -529,6 +538,44 @@ func (c *Cpu) interruptRequested() bool {
 }
 
 func (c *Cpu) sync(cycle int) {
+
+	defer func() {
+		if r := recover(); r != nil {
+			log.Printf("FAULT AT OP (val=%X bit=%.8b) CYCLE=%d REMAINING=%d PC=%X SP=%X IME=%d HL=%X\n", c.opcode, c.opcode, cycle, c.remainingCycles, c.pc, c.sp, c.ime, c.reg.r16(reg_hl))
+			log.Fatalf("%v : %s\n", r, string(debug.Stack()))
+		}
+	}()
+
+	sb := c.memory.Read(SERIAL_TRANSFER_SB)
+	sc := c.memory.Read(SERIAL_TRANSFER_SC)
+
+	if sc&0x80 > 0 && sc&0x1 > 0 { // transfer enabled AND clock master
+
+		modulo := 80 // 262144 Hz
+		if sc&0x2 > 0 {
+			modulo = 16
+		}
+
+		if cycle%modulo == 0 {
+			if c.scheduledSerial == 0 {
+				log.Printf("RECEIVED %d ROM SERIAL\n", sb)
+				c.scheduledSerial = 8
+			}
+
+			if c.scheduledSerial > 0 {
+				c.memory.Write(SERIAL_TRANSFER_SB, sb<<1) // incoming data
+				c.scheduledSerial--
+			}
+
+			if c.scheduledSerial == 0 {
+				c.memory.Write(SERIAL_TRANSFER_SB, 0x0)     // clear SB
+				c.memory.Write(SERIAL_TRANSFER_SC, sc&0x7F) // clear bit 7
+				// request SERIAL interruption
+				c.memory.Write(INTERRUPT_FLAG, c.memory.Read(INTERRUPT_FLAG)|0x8)
+			}
+		}
+	}
+
 	// if no opcode was read cycles is 0 (first cycle) or 1 (parallel fetch)
 	if c.opcode == 0 && c.remainingCycles <= 1 {
 
@@ -638,6 +685,7 @@ func (c *Cpu) sync(cycle int) {
 
 		if operation == "stop" {
 			log.Println("STOP INSTRUCTION RECEIVED")
+			c.stopped = true
 			return
 		}
 
@@ -653,8 +701,6 @@ func (c *Cpu) init() error {
 
 	// init classic game-boy
 	c.setup(CGB)
-	c.stopChan = make(chan bool, 1)
-	c.doneChan = make(chan bool)
 
 	var opcodes Opcodes
 	if err := json.Unmarshal(opcodesFile, &opcodes); err != nil {
@@ -702,6 +748,10 @@ func (c *Cpu) shouldStep() bool {
 
 func (c *Cpu) waitStep() int {
 	for {
+
+		if rl.IsKeyDown(rl.KeyN) {
+			return STEP_NEXT
+		}
 
 		key := rl.GetKeyPressed()
 		if key == 0 {

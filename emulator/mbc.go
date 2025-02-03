@@ -84,21 +84,32 @@ var (
 		0x54: 96,  // 1.5 Mib
 	}
 
-	// ramSizeMap RAM size in banks
+	// ramSizeMap RAM size in Kib
 	// https://gbdev.io/pandocs/The_Cartridge_Header.html#0149--ram-size
 	ramSizeMap = map[uint8]int{
-		0x00: 0,  // No RAM
-		0x01: 0,  // Unused / 2 Kib
-		0x02: 1,  // 8 Kib
-		0x03: 4,  // 32 Kib
-		0x04: 16, // 128 Kib
-		0x05: 8,  // 64 Kib
+		0x00: 0,   // No RAM
+		0x01: 2,   // Unused / 2 Kib
+		0x02: 8,   // 8 Kib
+		0x03: 32,  // 32 Kib
+		0x04: 128, // 128 Kib
+		0x05: 64,  // 64 Kib
 	}
 
 	mbcControllerMap = map[int]memoryController{
-		MBC1:             &mbc1{romSelected: 0x1, name: "MBC1"},
-		MBC1_RAM:         &mbc1{ramSupport: true, romSelected: 0x1, name: "MBC1_RAM"},
-		MBC1_RAM_BATTERY: &mbc1{ramSupport: true, batterySupport: true, romSelected: 0x1, name: "MBC1_RAM_BATTERY"},
+		MBC1:                    &mbc1{romSelected: 0x1, name: "MBC1"},
+		MBC1_RAM:                &mbc1{ramSupport: true, romSelected: 0x1, name: "MBC1_RAM"},
+		MBC1_RAM_BATTERY:        &mbc1{ramSupport: true, batterySupport: true, romSelected: 0x1, name: "MBC1_RAM_BATTERY"},
+		MBC2:                    &mbc2{romSelected: 0x1, name: "MBC2"},
+		MBC2_BATTERY:            &mbc2{romSelected: 0x1, batterySupport: true, name: "MBC2_BATTERY"},
+		MBC3:                    &mbc3{romSelected: 0x1, name: "MBC3"},
+		MBC3_TIMER_BATTERY:      &mbc3{romSelected: 0x1, name: "MBC3_TIMER_BATTERY", batterySupport: true},
+		MBC3_TIMER_RAM_BATTERY:  &mbc3{romSelected: 0x1, name: "MBC3_TIMER_RAM_BATTERY", ramSupport: true, batterySupport: true},
+		MBC5:                    &mbc5{romSelected: 0x1, name: "MBC5"},
+		MBC5_RAM:                &mbc5{romSelected: 0x1, name: "MBC5", ramSupport: true},
+		MBC5_RAM_BATTERY:        &mbc5{romSelected: 0x1, name: "MBC5", ramSupport: true, batterySupport: true},
+		MBC5_RUMBLE:             &mbc5{romSelected: 0x1, name: "MBC5", rumbleSupport: true},
+		MBC5_RUMBLE_RAM:         &mbc5{romSelected: 0x1, name: "MBC5", rumbleSupport: true, ramSupport: true},
+		MBC5_RUMBLE_RAM_BATTERY: &mbc5{romSelected: 0x1, name: "MBC5", rumbleSupport: true, ramSupport: true, batterySupport: true},
 	}
 )
 
@@ -106,6 +117,7 @@ type memoryController interface {
 	Write(area memoryArea, address Word, value uint8)
 	Read(area memoryArea, address Word) uint8
 	Name() string
+	Tick()
 }
 
 type Mbc struct {

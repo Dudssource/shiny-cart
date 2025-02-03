@@ -11,7 +11,7 @@ func op_swap_r8(c *Cpu, opcode uint8) {
 	var nn uint8
 	if r8 == reg_indirect_hl {
 		c.requiredCycles = 4
-		hl := c.reg.r16(r8)
+		hl := c.reg.r16(reg_hl)
 		nn = c.memory.Read(hl)
 	} else {
 		nn = c.reg.r8(r8)
