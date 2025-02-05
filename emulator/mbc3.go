@@ -86,7 +86,9 @@ func (b *mbc3) Write(area memoryArea, address Word, value uint8) {
 			value = 0x1
 		}
 
-		b.romSelected = value
+		// wrap around
+		rs := romSize(area)
+		b.romSelected = (value - uint8(rs)) % uint8(rs)
 
 		//log.Printf("Selected ROM bank number %d size=(%d)\n", b.romSelected, romSize(area))
 	}
