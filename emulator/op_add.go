@@ -39,7 +39,7 @@ func op_add_hl_r16(c *Cpu, opcode uint8) {
 	}
 
 	// set HL
-	c.reg.w16(reg_h, Word(result))
+	c.reg.w16(reg_hl, Word(result))
 
 	// save flags
 	c.reg.w_flag(flags)

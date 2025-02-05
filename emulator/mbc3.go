@@ -163,8 +163,8 @@ func (b *mbc3) Read(area memoryArea, address Word) uint8 {
 
 	// https://github.com/Hacktix/GBEDG/blob/master/mbcs/mbc3/index.md#4000---7fff-rom-banks-0x00---0x7f
 	if romBankNN(address) {
-		bank := Word(b.romSelected)
-		rAddr := (bank * SELECT_RAM_AREA_START) + (address - SELECT_RAM_AREA_START)
+		bank := int(b.romSelected)
+		rAddr := (bank * SELECT_RAM_AREA_START) + (int(address) - SELECT_RAM_AREA_START)
 		rValue := area[rAddr]
 		//log.Printf("Read %.8X from ROM bank NN %d address %.8X\n", rValue, bank, rAddr)
 		return rValue
@@ -174,7 +174,7 @@ func (b *mbc3) Read(area memoryArea, address Word) uint8 {
 	if externalRAMArea(address) {
 		if b.ramEnabled && b.mode == 0x1 {
 			bank := b.ramSelected
-			rAddr := (SELECT_ROM_AREA_START*Word(bank) + (address - RAM_BANK_START))
+			rAddr := (SELECT_ROM_AREA_START*int(bank) + (int(address) - RAM_BANK_START))
 			rValue := b.ramArea[rAddr]
 			//log.Printf("Mode 0 read %.8X from RAM bank 00 address %.8X\n", rValue, rAddr)
 			return rValue

@@ -82,12 +82,13 @@ func (c *Cpu) fetch() uint8 {
 
 func (c *Cpu) setup(mode Mode) {
 	switch mode {
-	case CGB:
-		c.reg.w8(reg_a, 0x11)
+	case DMG:
 		c.reg.w_flag(0x0)
-		c.reg.w16(reg_bc, 0x0100)
-		c.reg.w16(reg_de, 0x0008)
-		c.reg.w16(reg_hl, 0x007C)
+		c.reg.w8(reg_a, 0x01)
+		c.reg.w8(reg_f, 0xB0)
+		c.reg.w16(reg_bc, 0x0013)
+		c.reg.w16(reg_de, 0x00D8)
+		c.reg.w16(reg_hl, 0x014D)
 		c.sp = 0xFFFE
 		c.pc = CPU_START
 	}
@@ -282,7 +283,7 @@ func (c *Cpu) decode(opcode uint8) (instruction, string) {
 			prefix := c.fetch()
 			c.opcode = prefix
 
-			switch prefix & 0xF8 {
+			switch (prefix & 0xF8) >> 3 {
 			case 0x0:
 				// rlc r8
 				return op_rlc_r8, "CB rlc r8"
@@ -546,8 +547,8 @@ func (c *Cpu) sync(cycle int) {
 		}
 	}()
 
-	sb := c.memory.Read(SERIAL_TRANSFER_SB)
-	sc := c.memory.Read(SERIAL_TRANSFER_SC)
+	sb := c.memory.Read(PORT_SERIAL_TRANSFER_SB)
+	sc := c.memory.Read(PORT_SERIAL_TRANSFER_SC)
 
 	if sc&0x80 > 0 && sc&0x1 > 0 { // transfer enabled AND clock master
 
@@ -558,18 +559,18 @@ func (c *Cpu) sync(cycle int) {
 
 		if cycle%modulo == 0 {
 			if c.scheduledSerial == 0 {
-				log.Printf("RECEIVED %d ROM SERIAL\n", sb)
+				log.Printf("RECEIVED %d (0x%.8X) ROM SERIAL (PC=%.8X)\n", sb, sb, c.pc)
 				c.scheduledSerial = 8
 			}
 
 			if c.scheduledSerial > 0 {
-				c.memory.Write(SERIAL_TRANSFER_SB, sb<<1) // incoming data
+				c.memory.Write(PORT_SERIAL_TRANSFER_SB, sb<<1) // incoming data
 				c.scheduledSerial--
 			}
 
 			if c.scheduledSerial == 0 {
-				c.memory.Write(SERIAL_TRANSFER_SB, 0x0)     // clear SB
-				c.memory.Write(SERIAL_TRANSFER_SC, sc&0x7F) // clear bit 7
+				c.memory.Write(PORT_SERIAL_TRANSFER_SB, 0x0)     // clear SB
+				c.memory.Write(PORT_SERIAL_TRANSFER_SC, sc&0x7F) // clear bit 7
 				// request SERIAL interruption
 				c.memory.Write(INTERRUPT_FLAG, c.memory.Read(INTERRUPT_FLAG)|0x8)
 			}
@@ -700,7 +701,7 @@ func (c *Cpu) sync(cycle int) {
 func (c *Cpu) init() error {
 
 	// init classic game-boy
-	c.setup(CGB)
+	c.setup(DMG)
 
 	var opcodes Opcodes
 	if err := json.Unmarshal(opcodesFile, &opcodes); err != nil {
@@ -748,10 +749,6 @@ func (c *Cpu) shouldStep() bool {
 
 func (c *Cpu) waitStep() int {
 	for {
-
-		if rl.IsKeyDown(rl.KeyN) {
-			return STEP_NEXT
-		}
 
 		key := rl.GetKeyPressed()
 		if key == 0 {

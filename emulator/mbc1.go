@@ -105,11 +105,11 @@ func (b *mbc1) Read(area memoryArea, address Word) uint8 {
 			//log.Printf("Mode 0, read %.8X from ROM bank 00 address %.8X\n", rValue, address)
 			return rValue
 		} else {
-			bank := Word(0x0)
+			bank := int(0x0)
 			if romSize(area) > 32 {
-				bank = Word(b.ramSelected << 5)
+				bank = int(b.ramSelected << 5)
 			}
-			rAddr := (bank * SELECT_RAM_AREA_START) + address
+			rAddr := (bank * SELECT_RAM_AREA_START) + int(address)
 			rValue := area[rAddr]
 			//log.Printf("Mode 1, read %.8X from ROM bank 00 %d address %.8X\n", rValue, bank, rAddr)
 			return rValue
@@ -117,8 +117,8 @@ func (b *mbc1) Read(area memoryArea, address Word) uint8 {
 	}
 
 	if romBankNN(address) {
-		bank := Word(b.ramSelected<<5 | b.romSelected)
-		rAddr := (bank * SELECT_RAM_AREA_START) + (address - SELECT_RAM_AREA_START)
+		bank := int(b.ramSelected<<5 | b.romSelected)
+		rAddr := (bank * SELECT_RAM_AREA_START) + (int(address) - SELECT_RAM_AREA_START)
 		rValue := area[rAddr]
 		//log.Printf("Read %.8X from ROM bank NN %d address %.8X\n", rValue, bank, rAddr)
 		return rValue
@@ -133,7 +133,7 @@ func (b *mbc1) Read(area memoryArea, address Word) uint8 {
 			return rValue
 		} else {
 			bank := b.ramSelected
-			rAddr := (SELECT_ROM_AREA_START*Word(bank) + (address - RAM_BANK_START))
+			rAddr := (SELECT_ROM_AREA_START*int(bank) + (int(address) - RAM_BANK_START))
 			rValue := b.ramArea[rAddr]
 			//log.Printf("Mode 1, read %.8X from RAM bank NN %d address %.8X\n", rValue, bank, rAddr)
 			return rValue

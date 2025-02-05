@@ -2,7 +2,6 @@ package emulator
 
 import (
 	"log"
-	"sync"
 )
 
 const (
@@ -24,9 +23,6 @@ var (
 
 type Timer struct {
 	c            *Cpu
-	mu           *sync.Mutex
-	stopChan     chan bool
-	doneChan     chan bool
 	lastDivValue int
 }
 

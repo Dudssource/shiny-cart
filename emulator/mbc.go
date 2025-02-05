@@ -49,20 +49,20 @@ const (
 	ENABLE_RAM_MASK       = uint8(0xF)
 
 	// https://github.com/Hacktix/GBEDG/blob/master/mbcs/mbc1/index.md#2000---3fff-rom-bank
-	SELECT_ROM_AREA_START = Word(0x2000)
-	SELECT_ROM_AREA_END   = Word(0x3FFF)
+	SELECT_ROM_AREA_START = 0x2000
+	SELECT_ROM_AREA_END   = 0x3FFF
 
 	// https://gbdev.io/pandocs/MBC1.html#40005fff--ram-bank-number--or--upper-bits-of-rom-bank-number-write-only
-	SELECT_RAM_AREA_START = Word(0x4000)
-	SELECT_RAM_AREA_END   = Word(0x5FFF)
+	SELECT_RAM_AREA_START = 0x4000
+	SELECT_RAM_AREA_END   = 0x5FFF
 
 	// https://gbdev.io/pandocs/MBC1.html#a000bfff--ram-bank-0003-if-any
-	RAM_BANK_START = Word(0xA000)
-	RAM_BANK_END   = Word(0xBFFF)
+	RAM_BANK_START = 0xA000
+	RAM_BANK_END   = 0xBFFF
 
 	// https://gbdev.io/pandocs/MBC1.html#60007fff--banking-mode-select-write-only
-	SELECT_BANK_MODE_AREA_START = Word(0x6000)
-	SELECT_BANK_MODE_AREA_END   = Word(0x7FFF)
+	SELECT_BANK_MODE_AREA_START = 0x6000
+	SELECT_BANK_MODE_AREA_END   = 0x7FFF
 )
 
 var (

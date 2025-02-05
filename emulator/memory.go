@@ -13,8 +13,8 @@ const (
 )
 
 const (
-	SERIAL_TRANSFER_SB = 0xFF01
-	SERIAL_TRANSFER_SC = 0xFF02
+	PORT_SERIAL_TRANSFER_SB = 0xFF01
+	PORT_SERIAL_TRANSFER_SC = 0xFF02
 )
 
 type memoryArea []uint8
@@ -38,7 +38,16 @@ func (m *Memory) Read(address Word) uint8 {
 		return m.mbc.controller.Read(m.rom, address)
 	}
 
-	return m.mem[address]
+	rVal := m.mem[address]
+
+	// unreadable bits return 1
+	if address == PORT_JOYPAD {
+		return rVal | 0xC0
+	} else if address == PORT_SERIAL_TRANSFER_SC {
+		return rVal | 0x7C
+	}
+
+	return rVal
 }
 
 func (m *Memory) Write(address Word, value uint8) {

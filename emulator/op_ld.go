@@ -244,6 +244,7 @@ func op_ld_a_imm16(c *Cpu, _ uint8) {
 	c.requiredCycles = 4
 	z := c.fetch()
 	w := c.fetch()
+
 	wz := c.memory.Read(NewWord(w, z))
 	c.reg.w8(reg_a, wz)
 }
@@ -271,6 +272,7 @@ func op_ld_sp_e(c *Cpu, _ uint8) {
 
 	if result > 0xFF {
 		flags |= c_flag
+		result = 256 - result
 	}
 
 	cf := uint8(flags >> 4)
@@ -281,7 +283,7 @@ func op_ld_sp_e(c *Cpu, _ uint8) {
 		adj = 0xFF
 	}
 
-	c.reg.w8(reg_h, c.sp.High()+adj+cf)
+	c.reg.w16(reg_hl, NewWord(c.sp.High()+adj+cf, uint8(result)))
 }
 
 // https://rgbds.gbdev.io/docs/v0.7.0/gbz80.7#LD_SP,HL
