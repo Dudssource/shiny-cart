@@ -34,14 +34,20 @@ func (b *mbc5) Write(area memoryArea, address Word, value uint8) {
 
 	// https://github.com/Hacktix/GBEDG/blob/master/mbcs/mbc5/index.md#2000---2fff-rom-bank-low
 	if address >= SELECT_ROM_AREA_START && address <= Word(0x2FFF) {
-		b.romSelected |= uint16(value)
-		//log.Printf("Selected ROM bank number %d size=(%d)\n", b.romSelected, romSize(area))
+		b.romSelected = (b.romSelected & 0xFF00) | uint16(value)
+		// wrap around
+		rs := romSize(area)
+		b.romSelected = (b.romSelected - uint16(rs)) % uint16(rs)
+		//log.Printf("Selected ROM bank number %d size=%d, src=%b\n", b.romSelected, romSize(area), value)
 	}
 
 	// https://github.com/Hacktix/GBEDG/blob/master/mbcs/mbc5/index.md#3000---3fff-rom-bank-high
 	if address >= Word(0x3000) && address <= SELECT_ROM_AREA_END {
-		b.romSelected |= uint16(value) & 0x1 << 8
-		//log.Printf("Selected ROM bank number %d size=(%d)\n", b.romSelected, romSize(area))
+		b.romSelected = (b.romSelected & 0xFF) | ((uint16(value) & 0x1) << 8)
+		// wrap around
+		rs := romSize(area)
+		b.romSelected = (b.romSelected - uint16(rs)) % uint16(rs)
+		//log.Printf("Selected ROM bank number %d size=%d, src=%b\n", b.romSelected, romSize(area), value)
 	}
 
 	// https://github.com/Hacktix/GBEDG/blob/master/mbcs/mbc5/index.md#4000---5fff-ram-bank
@@ -58,7 +64,7 @@ func (b *mbc5) Write(area memoryArea, address Word, value uint8) {
 
 	// https://github.com/Hacktix/GBEDG/blob/master/mbcs/mbc5/index.md#a000---bfff-external-ram
 	if b.ramEnabled && externalRAMArea(address) {
-		rAddr := (SELECT_ROM_AREA_START*Word(b.ramSelected) + (address - RAM_BANK_START))
+		rAddr := (0x2000 * int(b.ramSelected)) + (int(address) - 0xA000)
 		b.ramArea[rAddr] = value
 		//log.Printf("Mode 1, 	written %.8X to RAM bank %d address %.8X\n", value, b.ramSelected, rAddr)
 	}

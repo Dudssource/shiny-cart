@@ -625,7 +625,7 @@ func (c *Cpu) sync(cycle int) {
 			}
 		}
 
-		if c.shouldStep() {
+		if c.shouldStep(c.opcode, operation) {
 			var sb strings.Builder
 			sb.WriteString("STEP BEFORE\n")
 			sb.WriteString("*********************************\n")
@@ -657,7 +657,7 @@ func (c *Cpu) sync(cycle int) {
 		// how many cycles for instruction
 		c.remainingCycles = c.requiredCycles
 
-		if c.shouldStep() {
+		if c.shouldStep(c.opcode, operation) {
 			var sb strings.Builder
 			sb.WriteString("STEP AFTER\n")
 			sb.WriteString("*********************************\n")
@@ -711,7 +711,7 @@ func (c *Cpu) init() error {
 	return nil
 }
 
-func (c *Cpu) shouldStep() bool {
+func (c *Cpu) shouldStep(opcode uint8, operation string) bool {
 
 	if c.step {
 		return true
@@ -736,6 +736,24 @@ func (c *Cpu) shouldStep() bool {
 				log.Printf("Invalid instruction filter syntax : %s\n", err.Error())
 			}
 			match := c.pc == Word(n)
+			if match {
+				c.breakPoints = strings.Replace(c.breakPoints, instruction, "", 1)
+				c.step = true
+			}
+			return match
+		case "OPC":
+			n, err := strconv.ParseInt(parts[1], 16, 32)
+			if err != nil {
+				log.Printf("Invalid instruction filter syntax : %s\n", err.Error())
+			}
+			match := opcode == uint8(n)
+			if match {
+				c.breakPoints = strings.Replace(c.breakPoints, instruction, "", 1)
+				c.step = true
+			}
+			return match
+		case "OPN":
+			match := operation == parts[1]
 			if match {
 				c.breakPoints = strings.Replace(c.breakPoints, instruction, "", 1)
 				c.step = true
