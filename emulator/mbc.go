@@ -84,9 +84,20 @@ var (
 		0x54: 96,  // 1.5 Mib
 	}
 
-	// ramSizeMap RAM size in Kib
+	// ramSizeMap RAM size in banks
 	// https://gbdev.io/pandocs/The_Cartridge_Header.html#0149--ram-size
 	ramSizeMap = map[uint8]int{
+		0x00: 0,  // No RAM
+		0x01: 0,  // Unused / 2 Kib
+		0x02: 1,  // 8 Kib
+		0x03: 4,  // 32 Kib
+		0x04: 16, // 128 Kib
+		0x05: 8,  // 64 Kib
+	}
+
+	// ramSizeMap RAM size in Kib
+	// https://gbdev.io/pandocs/The_Cartridge_Header.html#0149--ram-size
+	ramSizeMap1 = map[uint8]int{
 		0x00: 0,   // No RAM
 		0x01: 2,   // Unused / 2 Kib
 		0x02: 8,   // 8 Kib
@@ -190,7 +201,7 @@ func romSize(area memoryArea) int {
 	return romSizeMap[area[CARTRIDGE_HEADER_ROM_SIZE]]
 }
 
-// ramSize in KiB
+// ramSize in banks
 func ramSize(area memoryArea) int {
 	return ramSizeMap[area[CARTRIDGE_HEADER_RAM_SIZE]]
 }

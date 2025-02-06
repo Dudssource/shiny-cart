@@ -7,7 +7,7 @@ type mbc1 struct {
 	romSelected    uint8
 	ramSelected    uint8
 	mode           uint8
-	ramArea        [32000]uint8
+	ramArea        [32768]uint8
 	name           string
 }
 
@@ -69,6 +69,10 @@ func (b *mbc1) Write(area memoryArea, address Word, value uint8) {
 		// lower 2 bits of the written value
 		b.ramSelected = value & 0x3
 
+		// wrap around
+		rs := ramSize(area)
+		b.ramSelected = (b.ramSelected - uint8(rs)) % uint8(rs)
+
 		//log.Printf("Selected RAM bank number %d\n", b.ramSelected)
 	}
 
@@ -117,7 +121,10 @@ func (b *mbc1) Read(area memoryArea, address Word) uint8 {
 	}
 
 	if romBankNN(address) {
-		bank := int(b.ramSelected<<5 | b.romSelected)
+
+		// wrap around
+		rs := uint8(romSize(area))
+		bank := int((uint8(b.ramSelected<<5|b.romSelected) - rs) % rs)
 		rAddr := (bank * SELECT_RAM_AREA_START) + (int(address) - SELECT_RAM_AREA_START)
 		rValue := area[rAddr]
 		//log.Printf("Read %.8X from ROM bank NN %d address %.8X\n", rValue, bank, rAddr)
