@@ -753,7 +753,7 @@ func (c *Cpu) shouldStep(opcode uint8, operation string) bool {
 			}
 			return match
 		case "OPN":
-			match := operation == parts[1]
+			match := strings.EqualFold(operation, parts[1])
 			if match {
 				c.breakPoints = strings.Replace(c.breakPoints, instruction, "", 1)
 				c.step = true

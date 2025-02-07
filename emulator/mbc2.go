@@ -4,7 +4,7 @@ type mbc2 struct {
 	batterySupport bool
 	ramEnabled     bool
 	romSelected    uint8 // Unsigned 4-bit number
-	ramArea        [32000]uint8
+	ramArea        [32768]uint8
 	name           string
 }
 

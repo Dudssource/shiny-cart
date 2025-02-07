@@ -7,7 +7,7 @@ type mbc5 struct {
 	ramEnabled     bool
 	romSelected    uint16 // 9-bit unsigned
 	ramSelected    uint8  // 4 bit unsigned
-	ramArea        [32000]uint8
+	ramArea        [32768]uint8
 	name           string
 }
 

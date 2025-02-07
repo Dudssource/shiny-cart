@@ -17,7 +17,7 @@ type mbc3 struct {
 	ramSelected       uint8 // 2 bit unsigned
 	rtcSelected       uint8
 	rtcRegisters      map[uint8]uint8
-	ramArea           [32000]uint8
+	ramArea           [32768]uint8
 	name              string
 	latch             uint8
 	remaining         int // ms remaining to increase S register

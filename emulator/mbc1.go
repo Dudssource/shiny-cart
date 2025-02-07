@@ -45,9 +45,7 @@ func (b *mbc1) Write(area memoryArea, address Word, value uint8) {
 
 		// ignore pins according to the rom size
 		switch romSize(area) {
-		case 128:
-		case 64:
-		case 32:
+		case 128, 64, 32:
 			b.romSelected = value & 0x1F
 		case 16:
 			b.romSelected = value & 0xF
@@ -64,16 +62,18 @@ func (b *mbc1) Write(area memoryArea, address Word, value uint8) {
 	}
 
 	// https://gbdev.io/pandocs/MBC1.html#40005fff--ram-bank-number--or--upper-bits-of-rom-bank-number-write-only
-	if b.ramEnabled && selectRAMArea(address) {
+	if selectRAMArea(address) {
 
 		// lower 2 bits of the written value
 		b.ramSelected = value & 0x3
 
 		// wrap around
 		rs := ramSize(area)
-		b.ramSelected = (b.ramSelected - uint8(rs)) % uint8(rs)
+		if rs > 0 {
+			b.ramSelected = (b.ramSelected - uint8(rs)) % uint8(rs)
+		}
 
-		//log.Printf("Selected RAM bank number %d\n", b.ramSelected)
+		//log.Printf("Selected RAM bank number %d %.8b\n", b.ramSelected, value)
 	}
 
 	// https://gbdev.io/pandocs/MBC1.html#60007fff--banking-mode-select-write-only
@@ -89,7 +89,7 @@ func (b *mbc1) Write(area memoryArea, address Word, value uint8) {
 			b.ramArea[rAddr] = value
 			//log.Printf("Mode 0, written %.8X to RAM bank address %.8X\n", value, rAddr)
 		} else {
-			rAddr := (SELECT_ROM_AREA_START*Word(b.ramSelected) + (address - RAM_BANK_START))
+			rAddr := int((0x2000*int(b.ramSelected) + (int(address) - 0xA000)))
 			// TODO: Review
 			// if ramSize(area) <= 8 {
 			// 	rAddr = (address - RAM_BANK_START) % Word(ramSize(area)*1024)
@@ -111,7 +111,12 @@ func (b *mbc1) Read(area memoryArea, address Word) uint8 {
 		} else {
 			bank := int(0x0)
 			if romSize(area) > 32 {
-				bank = int(b.ramSelected << 5)
+				rs := romSize(area)
+				if rs == 64 {
+					bank = int(b.ramSelected & 0x1 << 5)
+				} else {
+					bank = int(b.ramSelected & 0x3 << 5)
+				}
 			}
 			rAddr := (bank * SELECT_RAM_AREA_START) + int(address)
 			rValue := area[rAddr]
@@ -124,10 +129,16 @@ func (b *mbc1) Read(area memoryArea, address Word) uint8 {
 
 		// wrap around
 		rs := uint8(romSize(area))
-		bank := int((uint8(b.ramSelected<<5|b.romSelected) - rs) % rs)
+		bankN := b.romSelected
+		if rs == 64 {
+			bankN |= (b.ramSelected & 0x1) << 5
+		} else {
+			bankN |= (b.ramSelected & 0x3) << 5
+		}
+		bank := int((bankN - rs) % rs)
 		rAddr := (bank * SELECT_RAM_AREA_START) + (int(address) - SELECT_RAM_AREA_START)
 		rValue := area[rAddr]
-		//log.Printf("Read %.8X from ROM bank NN %d address %.8X\n", rValue, bank, rAddr)
+		//log.Printf("Read %d from ROM bank NN %d address %.8X\n", rValue, bank, rAddr)
 		return rValue
 	}
 
