@@ -188,7 +188,7 @@ func add_a(c *Cpu, nn uint8) {
 func op_add_sp_imm8(c *Cpu, _ uint8) {
 	c.requiredCycles = 4
 	flags := c.reg.r_flags()
-	flags &= ^z_flag & ^n_flag
+	flags &= ^z_flag & ^n_flag & ^c_flag
 	z := c.fetch()
 	splsb := c.sp.Low()
 

@@ -23,6 +23,21 @@ func Test_op_rr_r8(t *testing.T) {
 		assert.Equal(t, c_flag, c.reg.r_flags())
 	})
 
+	t.Run("rl carry wk", func(t *testing.T) {
+		c := &Cpu{
+			reg: Registers{
+				reg_f: uint8(c_flag | h_flag),
+				reg_a: uint8(0b00010111),
+			},
+		}
+		// rl A
+		op := uint8(0b00011111)
+		op_rl_r8(c, op)
+
+		assert.Equal(t, uint8(0b00101111), c.reg.r8(reg_a))
+		assert.Equal(t, flag(0), c.reg.r_flags()&c_flag)
+	})
+
 	t.Run("r8 carry 0", func(t *testing.T) {
 		c := &Cpu{
 			reg: Registers{
@@ -58,7 +73,9 @@ func Test_op_rr_r8(t *testing.T) {
 			reg: Registers{
 				reg_f: uint8(c_flag),
 			},
-			memory: &Memory{},
+			memory: &Memory{
+				mem: make(memoryArea, 1024),
+			},
 		}
 		m := Word(0x40)
 		c.reg.w16(reg_hl, m)

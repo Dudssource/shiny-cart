@@ -2,7 +2,6 @@ package emulator
 
 import (
 	"fmt"
-	"io"
 	"log"
 	"math"
 	"os"
@@ -37,19 +36,16 @@ func NewGameBoy(debug, step, silent, profiling bool, breakPoints string) *GameBo
 		c:      c,
 		joypad: NewJoypad(c),
 		timer:  NewTimer(c),
-		video:  &Video{},
+		video: &Video{
+			mem:  c.memory,
+			mode: 2,
+		},
 	}
 }
 
 func (g *GameBoy) Load(romFile string) error {
 
-	f, err := os.Open(romFile)
-	if err != nil {
-		return err
-	}
-	defer f.Close()
-
-	stat, err := f.Stat()
+	f1, err := os.ReadFile(romFile)
 	if err != nil {
 		return err
 	}
@@ -59,28 +55,17 @@ func (g *GameBoy) Load(romFile string) error {
 	}
 
 	if len(g.c.memory.rom) == 0 {
-		g.c.memory.rom = make(memoryArea, stat.Size())
+		g.c.memory.rom = make(memoryArea, len(f1))
 	}
 
-	address := 0x0
-	for {
-
-		b := make([]byte, 1)
-		if _, err := f.Read(b); err != nil {
-			if err == io.EOF {
-				return nil
-			}
-			return err
+	for address, value := range f1 {
+		if address < int(VRAM_START) {
+			g.c.memory.mem[address] = value
 		}
-
-		for _, value := range b {
-			if address < int(VRAM_START) {
-				g.c.memory.mem[address] = value
-			}
-			g.c.memory.rom[address] = value
-			address++
-		}
+		g.c.memory.rom[address] = value
 	}
+
+	return nil
 }
 
 // Game Loop
@@ -170,7 +155,7 @@ func (g *GameBoy) Loop(interval time.Duration) error {
 		}
 
 		// emulate raylib event loop
-		g.video.Draw([]byte{}, 0, 0, false)
+		g.video.draw()
 	}
 
 	if !g.c.stopped {
@@ -199,7 +184,7 @@ func (g *GameBoy) init() error {
 	}
 
 	// init handlers
-	g.video.init(512, 256)
+	g.video.init(640, 576)
 	if err := g.c.init(); err != nil {
 		return err
 	}
@@ -213,4 +198,5 @@ func (g *GameBoy) broadcast(cycle int) {
 	g.joypad.sync(cycle)
 	g.timer.sync(cycle)
 	g.c.sync(cycle)
+	g.video.scan(g.c)
 }

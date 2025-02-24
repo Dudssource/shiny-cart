@@ -20,7 +20,7 @@ func Test_op_ccf(t *testing.T) {
 			args: args{
 				c: func() *Cpu {
 					cpu := &Cpu{}
-					cpu.init(CGB)
+					cpu.init()
 					cpu.reg.w_flag(c_flag)
 					return cpu
 				},
@@ -34,7 +34,7 @@ func Test_op_ccf(t *testing.T) {
 			args: args{
 				c: func() *Cpu {
 					cpu := &Cpu{}
-					cpu.init(CGB)
+					cpu.init()
 					cpu.reg.w_flag(0x0)
 					return cpu
 				},
@@ -48,7 +48,7 @@ func Test_op_ccf(t *testing.T) {
 			args: args{
 				c: func() *Cpu {
 					cpu := &Cpu{}
-					cpu.init(CGB)
+					cpu.init()
 					cpu.reg.w_flag(n_flag | h_flag | z_flag | c_flag)
 					return cpu
 				},
@@ -62,7 +62,7 @@ func Test_op_ccf(t *testing.T) {
 			args: args{
 				c: func() *Cpu {
 					cpu := &Cpu{}
-					cpu.init(CGB)
+					cpu.init()
 					cpu.reg.w_flag(n_flag | h_flag | z_flag)
 					return cpu
 				},

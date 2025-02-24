@@ -1,6 +1,8 @@
 package emulator
 
-import "log"
+import (
+	"log"
+)
 
 // https://rgbds.gbdev.io/docs/v0.7.0/gbz80.7#JR_n16
 func op_jr_imm8(c *Cpu, _ uint8) {

@@ -146,6 +146,7 @@ func (m *Mbc) detectType(mem memoryArea) error {
 
 	// no MBC
 	if cartridgeType == 0x0 {
+		log.Printf("No MBC detected!\n")
 		return nil
 	}
 

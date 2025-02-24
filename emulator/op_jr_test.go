@@ -20,7 +20,7 @@ func Test_op_jr_imm8(t *testing.T) {
 			args: args{
 				c: func() *Cpu {
 					cpu := &Cpu{}
-					cpu.init(CGB)
+					cpu.init()
 					cpu.memory.Write(0x9, 0x18) // JR e
 					cpu.memory.Write(0xA, 0xFE) // e=offset -2
 					cpu.pc = 0x9                // PC=0xA, JR e
@@ -37,7 +37,7 @@ func Test_op_jr_imm8(t *testing.T) {
 			args: args{
 				c: func() *Cpu {
 					cpu := &Cpu{}
-					cpu.init(CGB)
+					cpu.init()
 					cpu.memory.Write(0x9, 0x18) // JR e
 					cpu.memory.Write(0xA, 0x2)  // e=offset 2
 					cpu.pc = 0x9                // PC=0xA, JR e

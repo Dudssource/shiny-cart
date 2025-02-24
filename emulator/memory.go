@@ -15,6 +15,7 @@ const (
 const (
 	PORT_SERIAL_TRANSFER_SB = 0xFF01
 	PORT_SERIAL_TRANSFER_SC = 0xFF02
+	PORT_OAM_DMA_CONTROL    = 0xFF46
 )
 
 type memoryArea []uint8
@@ -34,7 +35,7 @@ func NewMemory() *Memory {
 func (m *Memory) Read(address Word) uint8 {
 
 	// intercept ROM and RAM memory reads
-	if m.mbc.initialized() && ownedByMBC(address) {
+	if m.mbc != nil && m.mbc.initialized() && ownedByMBC(address) {
 		return m.mbc.controller.Read(m.rom, address)
 	}
 
@@ -53,7 +54,7 @@ func (m *Memory) Read(address Word) uint8 {
 func (m *Memory) Write(address Word, value uint8) {
 
 	// intercepts ROM and RAM memory writes
-	if m.mbc.initialized() && ownedByMBC(address) {
+	if m.mbc != nil && m.mbc.initialized() && ownedByMBC(address) {
 		m.mbc.controller.Write(m.rom, address, value)
 		return
 	}

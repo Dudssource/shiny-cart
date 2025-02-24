@@ -57,8 +57,11 @@ type Cpu struct {
 	remainingCycles int
 	opcode          uint8
 
-	requiredCycles  int
+	requiredCycles int
+
 	scheduledSerial int
+	scheduledOAMDma int
+	oamDmaSource    int
 
 	// general purpose register pairs
 	reg Registers
@@ -91,7 +94,49 @@ func (c *Cpu) setup(mode Mode) {
 		c.reg.w16(reg_hl, 0x014D)
 		c.sp = 0xFFFE
 		c.pc = CPU_START
+
+		// r, err := os.ReadFile("./test-roms/dmg_boot.bin")
+		// if err != nil {
+		// 	panic(err)
+		// }
+
+		// for addr, v := range r {
+		// 	c.memory.Write(Word(addr), v)
+		// }
+		// c.pc = 0x0
+
+		// logo := []uint8{
+		// 	0xce, 0xed, 0x66, 0x66, 0xcc, 0x0d, 0x00, 0x0b, 0x03, 0x73, 0x00, 0x83, 0x00, 0x0c, 0x00, 0x0d, 0x00, 0x08, 0x11, 0x1f, 0x88, 0x89, 0x00, 0x0e, 0xdc, 0xcc, 0x6e, 0xe6, 0xdd, 0xdd, 0xd9, 0x99, 0xbb, 0xbb, 0x67, 0x63, 0x6e, 0x0e, 0xec, 0xcc, 0xdd, 0xdc, 0x99, 0x9f, 0xbb, 0xb9, 0x33, 0x3e,
+		// }
+
+		// for i := range logo {
+		// 	data := logo[i]
+		// 	c.memory.Write(Word(0x0104+i), data)
+		// }
+
+		// c.memory.Write(0x014D, 17)
+		c.scheduledOAMDma = -1
 	}
+}
+
+func (c *Cpu) decompressAndCopy(data uint8, addr Word) {
+	mask0 := uint8(0b00000001)
+	mask1 := uint8(0b00000011)
+	res := uint8(0)
+	for i := 0; i < 4; i++ {
+		if (data & mask0) > 0 {
+			res |= mask1
+		} else {
+			res |= 0
+		}
+		mask0 <<= 1
+		mask1 <<= 2
+	}
+
+	c.memory.Write(addr, res)
+	c.memory.Write(addr+2, res)
+	//*addr = res
+	//*(addr+2) = res
 }
 
 func (c *Cpu) decode(opcode uint8) (instruction, string) {
@@ -542,7 +587,7 @@ func (c *Cpu) sync(cycle int) {
 
 	defer func() {
 		if r := recover(); r != nil {
-			log.Printf("FAULT AT OP (val=%X bit=%.8b) CYCLE=%d REMAINING=%d PC=%X SP=%X IME=%d HL=%X\n", c.opcode, c.opcode, cycle, c.remainingCycles, c.pc, c.sp, c.ime, c.reg.r16(reg_hl))
+			log.Printf("FAULT AT OP (val=0x%X bit=%.8b) CYCLE=%d REMAINING=%d PC=0x%X SP=0x%X IME=%d HL=0x%X\n", c.opcode, c.opcode, cycle, c.remainingCycles, c.pc, c.sp, c.ime, c.reg.r16(reg_hl))
 			log.Fatalf("%v : %s\n", r, string(debug.Stack()))
 		}
 	}()
@@ -559,7 +604,7 @@ func (c *Cpu) sync(cycle int) {
 
 		if cycle%modulo == 0 {
 			if c.scheduledSerial == 0 {
-				log.Printf("RECEIVED %d (0x%.8X) ROM SERIAL (PC=%.8X)\n", sb, sb, c.pc)
+				log.Printf("RECEIVED %d (0x%.8X) ROM SERIAL (PC=0x%.8X)\n", sb, sb, c.pc)
 				c.scheduledSerial = 8
 			}
 
@@ -577,6 +622,23 @@ func (c *Cpu) sync(cycle int) {
 		}
 	}
 
+	// handle OAM request
+	oam := int(c.memory.Read(PORT_OAM_DMA_CONTROL))
+
+	if c.scheduledOAMDma >= 0 {
+		if c.scheduledOAMDma < 160 {
+			rSrcAddr := NewWord(uint8(c.oamDmaSource), 0x0) + Word(159-c.scheduledOAMDma)
+			rTgtAddr := Word(0xFE00 + 159 - Word(c.scheduledOAMDma))
+			rVal := c.memory.Read(rSrcAddr)
+			log.Printf("COPY OAM DMA 0x%X FROM 0x%X TO 0x%X (PC=0x%.8X, IDX=%d)\n", rVal, rSrcAddr, rTgtAddr, c.pc, c.scheduledOAMDma)
+			c.memory.Write(rTgtAddr, rVal)
+			//if c.scheduledOAMDma == 0x0 {
+			//log.Printf("Finished OAM\n")
+			//}
+		}
+		c.scheduledOAMDma--
+	}
+
 	// if no opcode was read cycles is 0 (first cycle) or 1 (parallel fetch)
 	if c.opcode == 0 && c.remainingCycles <= 1 {
 
@@ -586,7 +648,7 @@ func (c *Cpu) sync(cycle int) {
 			// how many cycles for instruction
 			c.remainingCycles = c.requiredCycles
 
-			log.Printf("INTERRUPT PC=%X SP=%X IME=%d\n", c.pc, c.sp, c.ime)
+			log.Printf("INTERRUPT PC=0x%X SP=0x%X IME=%d\n", c.pc, c.sp, c.ime)
 
 			// nop
 			return
@@ -630,11 +692,11 @@ func (c *Cpu) sync(cycle int) {
 			sb.WriteString("STEP BEFORE\n")
 			sb.WriteString("*********************************\n")
 
-			sb.WriteString(fmt.Sprintf("\tOP (val=%X bit=%.8b name=%s) \n\tPC=%X\n\tSP=%X\n\tIME=%d\n", c.opcode, c.opcode, operation, c.pc, c.sp, c.ime))
+			sb.WriteString(fmt.Sprintf("\tOP (val=0x%X bit=%.8b name=%s) \n\tPC=0x%X\n\tSP=0x%X\n\tIME=%d\n", c.opcode, c.opcode, operation, c.pc-1, c.sp, c.ime))
 
-			sb.WriteString(fmt.Sprintf("\tREG_B=%X\n\tREG_C=%X\n\tREG_D=%X\n\tREG_E=%X\n\tREG_H=%X\n\tREG_L=%X\n\tREG_A=%X\n\tREG_F=%X\n", c.reg.r8(reg_b), c.reg.r8(reg_c), c.reg.r8(reg_d), c.reg.r8(reg_e), c.reg.r8(reg_h), c.reg.r8(reg_l), c.reg.r8(reg_a), c.reg.r8(reg_f)))
+			sb.WriteString(fmt.Sprintf("\tREG_B=0x%X\n\tREG_C=0x%X\n\tREG_D=0x%X\n\tREG_E=0x%X\n\tREG_H=0x%X\n\tREG_L=0x%X\n\tREG_A=0x%X\n\tREG_F=0x%X\n", c.reg.r8(reg_b), c.reg.r8(reg_c), c.reg.r8(reg_d), c.reg.r8(reg_e), c.reg.r8(reg_h), c.reg.r8(reg_l), c.reg.r8(reg_a), c.reg.r8(reg_f)))
 
-			sb.WriteString(fmt.Sprintf("\tREG_BC=%X\n\tREG_DE=%X\n\tREG_HL=%X\n\tREG_SP=%X\n", c.reg.r16(reg_bc), c.reg.r16(reg_de), c.reg.r16(reg_hl), c.reg.r16(reg_sp)))
+			sb.WriteString(fmt.Sprintf("\tREG_BC=0x%X\n\tREG_DE=0x%X\n\tREG_HL=0x%X\n\tREG_SP=0x%X\n", c.reg.r16(reg_bc), c.reg.r16(reg_de), c.reg.r16(reg_hl), c.reg.r16(reg_sp)))
 
 			sb.WriteString(fmt.Sprintf("\tZ_FLAG=%d\n\tN_FLAG=%d\n\tC_FLAG=%d\n\tH_FLAG=%d\n", c.reg.r_flags()&z_flag, c.reg.r_flags()&n_flag, c.reg.r_flags()&c_flag, c.reg.r_flags()&h_flag))
 
@@ -662,11 +724,11 @@ func (c *Cpu) sync(cycle int) {
 			sb.WriteString("STEP AFTER\n")
 			sb.WriteString("*********************************\n")
 
-			sb.WriteString(fmt.Sprintf("\tOP (val=%X bit=%.8b name=%s) \n\tPC=%X\n\tSP=%X\n\tIME=%d\n", c.opcode, c.opcode, operation, c.pc, c.sp, c.ime))
+			sb.WriteString(fmt.Sprintf("\tOP (val=0x%X bit=%.8b name=%s) \n\tPC=0x%X\n\tSP=0x%X\n\tIME=%d\n", c.opcode, c.opcode, operation, c.pc, c.sp, c.ime))
 
-			sb.WriteString(fmt.Sprintf("\tREG_B=%X\n\tREG_C=%X\n\tREG_D=%X\n\tREG_E=%X\n\tREG_H=%X\n\tREG_L=%X\n\tREG_A=%X\n\tREG_F=%X\n", c.reg.r8(reg_b), c.reg.r8(reg_c), c.reg.r8(reg_d), c.reg.r8(reg_e), c.reg.r8(reg_h), c.reg.r8(reg_l), c.reg.r8(reg_a), c.reg.r8(reg_f)))
+			sb.WriteString(fmt.Sprintf("\tREG_B=0x%X\n\tREG_C=0x%X\n\tREG_D=0x%X\n\tREG_E=0x%X\n\tREG_H=0x%X\n\tREG_L=0x%X\n\tREG_A=0x%X\n\tREG_F=0x%X\n", c.reg.r8(reg_b), c.reg.r8(reg_c), c.reg.r8(reg_d), c.reg.r8(reg_e), c.reg.r8(reg_h), c.reg.r8(reg_l), c.reg.r8(reg_a), c.reg.r8(reg_f)))
 
-			sb.WriteString(fmt.Sprintf("\tREG_BC=%X\n\tREG_DE=%X\n\tREG_HL=%X\n\tREG_SP=%X\n", c.reg.r16(reg_bc), c.reg.r16(reg_de), c.reg.r16(reg_hl), c.reg.r16(reg_sp)))
+			sb.WriteString(fmt.Sprintf("\tREG_BC=0x%X\n\tREG_DE=0x%X\n\tREG_HL=0x%X\n\tREG_SP=0x%X\n", c.reg.r16(reg_bc), c.reg.r16(reg_de), c.reg.r16(reg_hl), c.reg.r16(reg_sp)))
 
 			sb.WriteString(fmt.Sprintf("\tZ_FLAG=%d\n\tN_FLAG=%d\n\tC_FLAG=%d\n\tH_FLAG=%d\n", c.reg.r_flags()&z_flag, c.reg.r_flags()&n_flag, c.reg.r_flags()&c_flag, c.reg.r_flags()&h_flag))
 
@@ -681,7 +743,7 @@ func (c *Cpu) sync(cycle int) {
 				c.step = false
 			}
 		} else if !c.silent {
-			log.Printf("OP (val=%X bit=%.8b name=%s) CYCLE=%d REMAINING=%d PC=%X SP=%X IME=%d HL=%X\n", c.opcode, c.opcode, operation, cycle, c.remainingCycles, c.pc, c.sp, c.ime, c.reg.r16(reg_hl))
+			log.Printf("OP (val=0x%X bit=%.8b name=%s) CYCLE=%d REMAINING=%d PC=0x%X SP=0x%X IME=%d HL=0x%X\n", c.opcode, c.opcode, operation, cycle, c.remainingCycles, c.pc-1, c.sp, c.ime, c.reg.r16(reg_hl))
 		}
 
 		if operation == "stop" {
@@ -692,6 +754,14 @@ func (c *Cpu) sync(cycle int) {
 
 		// reset opcode
 		c.opcode = 0x0
+	}
+
+	// check if OAM changed
+	newOam := int(c.memory.Read(PORT_OAM_DMA_CONTROL))
+	if c.scheduledOAMDma == -1 && oam != newOam {
+		log.Printf("SCHEDULED OAM DMA AT 0x%X (PC=0x%.8X)\n", newOam, c.pc)
+		c.scheduledOAMDma = 160 // 1 m-cycle delay
+		c.oamDmaSource = newOam
 	}
 
 	// decrease the number of cycles
@@ -722,7 +792,7 @@ func (c *Cpu) shouldStep(opcode uint8, operation string) bool {
 		return false
 	}
 
-	for _, instruction := range strings.Split(bg, " ") {
+	for _, instruction := range strings.Split(bg, ";") {
 
 		parts := strings.SplitN(instruction, "=", 2)
 		if len(parts) != 2 {
@@ -735,10 +805,11 @@ func (c *Cpu) shouldStep(opcode uint8, operation string) bool {
 			if err != nil {
 				log.Printf("Invalid instruction filter syntax : %s\n", err.Error())
 			}
-			match := c.pc == Word(n)
+			match := c.pc-1 == Word(n)
 			if match {
 				c.breakPoints = strings.Replace(c.breakPoints, instruction, "", 1)
 				c.step = true
+				c.memory.Write(0xFFFF, 1)
 			}
 			return match
 		case "OPC":

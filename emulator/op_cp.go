@@ -61,7 +61,7 @@ func cp_a(c *Cpu, nn int) {
 	// set z_flag=off
 	// set c_flag=off
 	// set h_flag=off
-	flags &= ^z_flag & c_flag & h_flag
+	flags &= ^(z_flag & c_flag & h_flag)
 
 	// A
 	a := int(c.reg.r8(reg_a))

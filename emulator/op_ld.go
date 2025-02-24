@@ -126,6 +126,7 @@ func op_ld_r16mem_a(c *Cpu, opcode uint8) {
 
 	// dst == [hl+]
 	if dst == 0x2 {
+
 		// hl = reg[hl]
 		hl := c.reg.r16(reg_hl)
 

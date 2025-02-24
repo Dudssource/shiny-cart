@@ -1,9 +1,5 @@
 package emulator
 
-import (
-	"log"
-)
-
 const (
 	PORT_DIV  = Word(0xFF04)
 	PORT_TIMA = Word(0xFF05)
@@ -66,7 +62,7 @@ func (t *Timer) sync(cycle int) {
 			if currentTimaValue+1 > 0xFF {
 				tma := t.c.memory.Read(PORT_TMA)
 				iflag := t.c.memory.Read(INTERRUPT_FLAG) | 0x4
-				log.Printf("TIMA=%d, CYCLE %d, FREQ=%d, TMA=%d, IFLAG=%.8b\n", currentTimaValue, cycle, timaClock[timaFrequency], tma, iflag)
+				//log.Printf("TIMA=%d, CYCLE %d, FREQ=%d, TMA=%d, IFLAG=%.8b\n", currentTimaValue, cycle, timaClock[timaFrequency], tma, iflag)
 				// set TIMA as TMA (Modulo)
 				t.c.memory.Write(PORT_TIMA, tma)
 				// request TIMER interruption

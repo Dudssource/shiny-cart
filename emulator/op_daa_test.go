@@ -9,7 +9,7 @@ import (
 func TestOpDaa(t *testing.T) {
 
 	c := &Cpu{}
-	c.init(CGB)
+	c.init()
 
 	t.Run("half carry on", func(t *testing.T) {
 		c.reg.w8(reg_a, 0x3C)
