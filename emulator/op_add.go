@@ -18,24 +18,31 @@ func op_add_hl_r16(c *Cpu, opcode uint8) {
 	// 0b00110000
 	dst := (opcode & 0x30) >> 4
 
-	// nn = r16
-	nn := c.reg.r16(dst)
+	var nn Word
+
+	// SP
+	if dst == 0x3 {
+		nn = c.sp
+	} else {
+		// nn = r16
+		nn = c.reg.r16(dst)
+	}
 
 	// HL
 	hl := c.reg.r16(reg_hl)
 
 	// HL + NN
-	result := uint32(hl + nn)
+	result := int32(hl) + int32(nn)
 
 	// if result is greater than 0xFFF, set half-carry=on (bit 11)
-	if (hl&0xFFF + nn&0xFFF) > 0xFFF {
+	if (hl.High()&0xF + nn.High()&0xF) > 0xF {
 		flags |= h_flag
 	}
 
 	// if result is greater than 0xFFFF, set carry=on (bit 15)
 	if result > 0xFFFF {
 		flags |= c_flag
-		result = result - 0xFFFF
+		result = result - 65536
 	}
 
 	// set HL
@@ -164,12 +171,12 @@ func add_a(c *Cpu, nn uint8) {
 	}
 
 	// A + NN
-	result := uint16(a + nn)
+	result := int16(a) + int16(nn)
 
 	// if result is greater than 0xFF, set carry=on (bit 7)
 	if result > 0xFF {
 		flags |= c_flag
-		result = result - 0xFF
+		result = result - 256
 	}
 
 	// z-flag = on
@@ -188,20 +195,28 @@ func add_a(c *Cpu, nn uint8) {
 func op_add_sp_imm8(c *Cpu, _ uint8) {
 	c.requiredCycles = 4
 	flags := c.reg.r_flags()
-	flags &= ^z_flag & ^n_flag & ^c_flag
+	flags &= ^z_flag & ^n_flag & ^c_flag & ^h_flag
 	z := c.fetch()
-	splsb := c.sp.Low()
 
-	if (z&0xF + splsb&0xF) > 0xF {
+	var result int16
+
+	// signed
+	if z&0x80 > 0 {
+		z = ^z + 1
+		result = int16(c.sp) - int16(z)
+	} else {
+		result = int16(c.sp) + int16(z)
+	}
+
+	// https://stackoverflow.com/a/57981912
+	if (z&0xF + c.sp.Low()) > 0xF {
 		flags |= h_flag
 	}
 
-	result := z + splsb
 	if result > 0xFF {
 		flags |= c_flag
-		result -= 0xFF
+		result = result - 256
 	}
 
-	result2 := c.sp.High() + uint8((flags&c_flag)>>4)
-	c.sp = NewWord(result2, result)
+	c.sp = Word(result)
 }

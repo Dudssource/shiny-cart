@@ -10,8 +10,15 @@ func op_dec_r16(c *Cpu, opcode uint8) {
 	// 0b00110000
 	dst := (opcode & 0x30) >> 4
 
-	// DEC r16
-	c.reg.w16(dst, c.reg.r16(dst)-1)
+	if dst == reg_sp {
+		// DEC SP
+		c.sp--
+
+	} else {
+
+		// DEC r16
+		c.reg.w16(dst, c.reg.r16(dst)-1)
+	}
 }
 
 // https://rgbds.gbdev.io/docs/v0.7.0/gbz80.7#DEC_r8

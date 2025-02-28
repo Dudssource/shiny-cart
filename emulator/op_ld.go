@@ -105,12 +105,19 @@ func op_ld_r16_imm16(c *Cpu, opcode uint8) {
 	// 0b00110000
 	dst := (opcode & 0x30) >> 4
 
+	val := NewWord(hi, lo)
+
 	if c.debug {
-		log.Printf("LD %d, %.8X\n", dst, NewWord(hi, lo))
+		log.Printf("LD %d, %.8X\n", dst, val)
 	}
 
-	// LD r16, imm16
-	c.reg.w16(dst, NewWord(hi, lo))
+	if dst == reg_sp {
+		// LD SP, imm16
+		c.sp = val
+	} else {
+		// LD r16, imm16
+		c.reg.w16(dst, val)
+	}
 }
 
 // https://rgbds.gbdev.io/docs/v0.7.0/gbz80.7#LD__r16_,A
@@ -228,7 +235,7 @@ func op_ld_imm16_mem_sp(c *Cpu, opcode uint8) {
 	nn := NewWord(hi, lo)
 
 	// get SP
-	sp := c.reg.r16(reg_sp)
+	sp := c.sp
 
 	// write to memory the lsb of sp, little-endian
 	c.memory.Write(nn, sp.Low())
@@ -265,26 +272,27 @@ func op_ld_sp_e(c *Cpu, _ uint8) {
 	flags := c.reg.r_flags()
 	flags &= ^z_flag & ^n_flag
 	sp := c.sp.Low()
-	result := uint16(sp + z)
 
+	var result int16
+
+	if z&0x80 > 0 {
+		z = ^z + 1
+		result = int16(sp) - int16(z)
+	} else {
+		result = int16(sp) + int16(z)
+	}
+
+	// https://stackoverflow.com/a/57981912
 	if (sp&0xF)+(z&0xF) > 0xF {
 		flags |= h_flag
 	}
 
 	if result > 0xFF {
 		flags |= c_flag
-		result = 256 - result
+		result = result - 256
 	}
 
-	cf := uint8(flags >> 4)
-
-	var adj = uint8(0)
-
-	if z&uint8(z_flag) > 0 {
-		adj = 0xFF
-	}
-
-	c.reg.w16(reg_hl, NewWord(c.sp.High()+adj+cf, uint8(result)))
+	c.reg.w16(reg_hl, NewWord(c.sp.High(), uint8(result)))
 }
 
 // https://rgbds.gbdev.io/docs/v0.7.0/gbz80.7#LD_SP,HL

@@ -68,7 +68,7 @@ func or_a(c *Cpu, nn uint8) {
 	// n_flag=off
 	// c_flag=off
 	// h_flag=off
-	flags &= ^z_flag & ^n_flag & ^c_flag &^ h_flag
+	flags &= ^z_flag & ^n_flag & ^c_flag & ^h_flag
 
 	// reg[a]
 	a := c.reg.r8(reg_a)

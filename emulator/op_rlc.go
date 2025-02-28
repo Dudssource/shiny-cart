@@ -22,9 +22,10 @@ func op_rlc_r8(c *Cpu, opcode uint8) {
 
 	lm := (nn & 0x80) >> 7
 
-	result := (nn << 1) | lm
+	result := int16((nn << 1) | lm)
 	if result > 0xFF {
 		flags |= c_flag
+		result = result - 256
 	}
 
 	if result == 0 {
@@ -33,9 +34,9 @@ func op_rlc_r8(c *Cpu, opcode uint8) {
 
 	if dst == reg_indirect_hl {
 		hl := c.reg.r16(reg_hl)
-		c.memory.Write(hl, result)
+		c.memory.Write(hl, uint8(result))
 	} else {
-		c.reg.w8(dst, result)
+		c.reg.w8(dst, uint8(result))
 	}
 
 	c.reg.w_flag(flags)

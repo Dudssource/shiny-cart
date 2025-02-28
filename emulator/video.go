@@ -3,6 +3,7 @@ package emulator
 import (
 	"fmt"
 	"image/color"
+	"log"
 	"sort"
 	"time"
 
@@ -11,7 +12,7 @@ import (
 
 type Pixel uint8
 
-type Tile [8][8]Pixel
+type Tile [16][8]Pixel
 
 type Sprite struct {
 	yPos  uint8
@@ -37,6 +38,7 @@ const (
 	LCDC_REGISTER = 0xFF40
 	LCD_REGISTER  = 0xFF41
 	LY_REGISTER   = 0xFF44
+	LYC_REGISTER  = 0xFF45
 )
 
 type Video struct {
@@ -46,14 +48,16 @@ type Video struct {
 	internalHeight int32
 	scaleFactor    int32
 
-	mem        *Memory
-	scanline   int
-	scancolumn int
-	mode       uint8
-	buffer     []Sprite
-	tick       int
-	delay      int
-	nextMode   uint8
+	mem            *Memory
+	scanline       int
+	scancolumn     int
+	mode           uint8
+	buffer         []Sprite
+	tick           int
+	delay          int
+	nextMode       uint8
+	disabled       bool
+	lastComparison bool
 
 	currentOamAddr Word
 
@@ -98,6 +102,7 @@ func (v *Video) setMode(mode uint8) {
 	if (lcds&0x20 > 0 && mode == 2) || (lcds&0x10 > 0 && mode == 1) || (lcds&0x8 > 0 && mode == 0) {
 		iflag := v.mem.Read(INTERRUPT_FLAG) | 0x2
 		v.mem.Write(INTERRUPT_FLAG, iflag)
+		//v.lastComparison = true
 	}
 
 	if mode == 1 {
@@ -192,7 +197,7 @@ func (v *Video) fetchTile(tileNumber, mode, size uint8) Tile {
 		}
 	}
 
-	var tile [8][8]Pixel
+	var tile [16][8]Pixel
 
 	// loop to build the pixels, byte per byte
 	for s := Word(0x0); s < Word(size); s++ {
@@ -278,27 +283,72 @@ func (v *Video) draw() {
 	}
 }
 
-func (v *Video) advanceLy() {
-	v.scanline++
-	v.mem.Write(LY_REGISTER, uint8(v.scanline))
+func (v *Video) checkInterruption(c *Cpu, resetCondition bool) {
 	lcds := v.mem.Read(LCD_REGISTER)
-	if lcds&0x40 > 0 && (lcds&0x40)>>6 == uint8(v.scanline) {
-		iflag := v.mem.Read(INTERRUPT_FLAG) | 0x2
-		v.mem.Write(INTERRUPT_FLAG, iflag)
-		v.mem.Write(LCD_REGISTER, lcds|0x4)
-	} else {
+	lyc := v.mem.Read(LYC_REGISTER)
+
+	// LYC enabled, LYC=LY CONDITION IS MET, LY=LYC COMPARISON IS FALSE (IRQ BLOCKING)
+	if lcds&0x40 > 0 && lyc == uint8(v.scanline) {
+		if lcds&0x4 == 0 {
+			iflag := v.mem.Read(INTERRUPT_FLAG) | 0x2
+			v.mem.Write(INTERRUPT_FLAG, iflag)
+			v.mem.Write(LCD_REGISTER, lcds|0x4)
+			log.Printf("REQUESTING INTERRUPTION LYC=%d LY=%d LCDS=%.8b LCDC=%.8b IME=%d PC=0x%X\n", lyc, v.scanline, lcds, v.mem.Read(LCDC_REGISTER), c.ime, c.pc)
+		}
+		//v.lastComparison = true
+	} else if resetCondition {
+		// reset LY=LYC COMPARISON FLAG
 		v.mem.Write(LCD_REGISTER, lcds&0xFB)
 	}
-	//fmt.Printf("LY=%d\n", v.scanline)
+}
+
+func (v *Video) advanceLy(c *Cpu) {
+	v.scanline++
+	v.mem.Write(LY_REGISTER, uint8(v.scanline))
+	// check for LY=0 as well
+	v.checkInterruption(c, true)
+	v.lastComparison = false
+	if c.step {
+		fmt.Printf("LY=%d\n", v.scanline)
+	}
 }
 
 func (v *Video) scan(c *Cpu) {
+
+	// was disabled, now we reset
+	if v.disabled && v.mem.Read(LCDC_REGISTER)&0x80 > 0 {
+		lcds := v.mem.Read(LCD_REGISTER)
+		log.Printf("REENABLING PPU %.8b PC=0x%X >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>\n", lcds, c.pc)
+		v.scanline = 0
+		v.scancolumn = 0
+		v.mode = 2
+		v.tick = 0
+		v.total = 0
+		v.total2 = 0
+		v.delay = 0
+		v.buffer = make([]Sprite, 0)
+		v.currentOamAddr = 0
+		v.disabled = false
+		v.checkInterruption(c, true)
+		return
+	}
+
+	// LCD/PPU disabled
+	if v.mem.Read(LCDC_REGISTER)&0x80 == 0x0 {
+		if !v.disabled {
+			log.Printf("DISABLING PPU\n")
+			v.disabled = true
+		}
+		return
+	}
+
+	v.checkInterruption(c, false)
 
 	v.total++
 	v.total2++
 
 	if c.step {
-		fmt.Printf("LCDC=%.8b STAT=%.8b\n", v.mem.Read(LCDC_REGISTER), v.mem.Read(LCD_REGISTER))
+		fmt.Printf("LCDC=%.8b STAT=%.8b, LY=%d, LYC=%d\n", v.mem.Read(LCDC_REGISTER), v.mem.Read(LCD_REGISTER), v.scanline, v.mem.Read(LYC_REGISTER))
 	}
 
 	// used to delay PPU by n ticks
@@ -334,7 +384,7 @@ func (v *Video) scan(c *Cpu) {
 			v.setMode(2)
 		} else {
 			// advance LY
-			v.advanceLy()
+			v.advanceLy(c)
 			if v.scanline > 144 {
 				v.delay = 114
 				v.nextMode = 1
@@ -474,7 +524,7 @@ func (v *Video) scan(c *Cpu) {
 				// reset buffer
 				v.buffer = make([]Sprite, 0)
 				// advance LY
-				v.advanceLy()
+				v.advanceLy(c)
 				v.delay = 4
 				v.nextMode = 0
 				v.scancolumn = 0

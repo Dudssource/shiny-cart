@@ -42,6 +42,9 @@ func (c *Registers) w16(r uint8, v Word) {
 }
 
 func (c *Registers) r8(r uint8) uint8 {
+	if r == reg_f {
+		return c[r] & 0xF0
+	}
 	return c[r]
 }
 

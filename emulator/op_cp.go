@@ -1,5 +1,9 @@
 package emulator
 
+import (
+	"log"
+)
+
 // https://rgbds.gbdev.io/docs/v0.7.0/gbz80.7#CP_A,r8
 // https://rgbds.gbdev.io/docs/v0.7.0/gbz80.7#CP_A,_HL_
 func op_cp_a_r8(c *Cpu, opcode uint8) {
@@ -45,6 +49,10 @@ func op_cp_a_imm8(c *Cpu, _ uint8) {
 	// mem[PC]
 	nn := int(c.fetch())
 
+	if c.step {
+		log.Printf("cp A, %d\n", nn)
+	}
+
 	// CP A
 	cp_a(c, nn)
 }
@@ -55,13 +63,13 @@ func cp_a(c *Cpu, nn int) {
 	// read flags
 	flags := c.reg.r_flags()
 
-	// set n_flag=on
-	flags |= n_flag
-
 	// set z_flag=off
 	// set c_flag=off
 	// set h_flag=off
-	flags &= ^(z_flag & c_flag & h_flag)
+	flags &= ^(z_flag | c_flag | h_flag)
+
+	// set n_flag=on
+	flags |= n_flag
 
 	// A
 	a := int(c.reg.r8(reg_a))
@@ -77,11 +85,7 @@ func cp_a(c *Cpu, nn int) {
 	// r8 > a
 	if result < 0 {
 		flags |= c_flag
-		result = 256 + result
-	}
-
-	// zero
-	if result == 0 {
+	} else if result == 0 { // zero
 		flags |= z_flag
 	}
 

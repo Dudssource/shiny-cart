@@ -13,7 +13,7 @@ func op_cpl(c *Cpu, _ uint8) {
 	flags := c.reg.r_flags()
 
 	// set n and h to 1
-	flags |= n_flag | h_flag
+	flags |= (n_flag | h_flag)
 
 	// save flags
 	c.reg.w_flag(flags)

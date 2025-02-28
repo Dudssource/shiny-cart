@@ -48,6 +48,7 @@ type Opcodes struct {
 
 type Cpu struct {
 	memory *Memory // 8-bit address bus
+	stack  [65536]uint8
 
 	pc Word // program counter
 	sp Word // stack pointer
@@ -65,6 +66,9 @@ type Cpu struct {
 
 	// general purpose register pairs
 	reg Registers
+
+	haltBug bool
+	halted  bool
 
 	debug       bool
 	step        bool
@@ -94,6 +98,14 @@ func (c *Cpu) setup(mode Mode) {
 		c.reg.w16(reg_hl, 0x014D)
 		c.sp = 0xFFFE
 		c.pc = CPU_START
+
+		// https://gbdev.io/pandocs/Power_Up_Sequence.html#hardware-registers
+		c.memory.Write(LCDC_REGISTER, 0x91)
+		c.memory.Write(LCD_REGISTER, 0x85)
+		c.memory.Write(INTERRUPT_FLAG, 0xE1)
+		c.memory.Write(PORT_SERIAL_TRANSFER_SC, 0x7E)
+		c.memory.Write(PORT_SERIAL_TRANSFER_SB, 0x00)
+		c.memory.Write(PORT_JOYPAD, 0xCF)
 
 		// r, err := os.ReadFile("./test-roms/dmg_boot.bin")
 		// if err != nil {
@@ -236,6 +248,8 @@ func (c *Cpu) decode(opcode uint8) (instruction, string) {
 			// since the 3 rightmost bits are 0, we can safely RSH by 3 to get the real value
 			switch opcode >> 3 {
 			case 0x2:
+				// reset timer
+				c.memory.Write(PORT_DIV, 0x0)
 				// stop
 				// https://gist.github.com/SonoSooS/c0055300670d678b5ae8433e20bea595#nop-and-stop
 				return op_nop, "stop"
@@ -595,7 +609,7 @@ func (c *Cpu) sync(cycle int) {
 	sb := c.memory.Read(PORT_SERIAL_TRANSFER_SB)
 	sc := c.memory.Read(PORT_SERIAL_TRANSFER_SC)
 
-	if sc&0x80 > 0 && sc&0x1 > 0 { // transfer enabled AND clock master
+	if !c.halted && sc&0x80 > 0 && sc&0x1 > 0 { // transfer enabled AND clock master
 
 		modulo := 80 // 262144 Hz
 		if sc&0x2 > 0 {
@@ -625,7 +639,7 @@ func (c *Cpu) sync(cycle int) {
 	// handle OAM request
 	oam := int(c.memory.Read(PORT_OAM_DMA_CONTROL))
 
-	if c.scheduledOAMDma >= 0 {
+	if !c.halted && c.scheduledOAMDma >= 0 {
 		if c.scheduledOAMDma < 160 {
 			rSrcAddr := NewWord(uint8(c.oamDmaSource), 0x0) + Word(159-c.scheduledOAMDma)
 			rTgtAddr := Word(0xFE00 + 159 - Word(c.scheduledOAMDma))
@@ -639,8 +653,15 @@ func (c *Cpu) sync(cycle int) {
 		c.scheduledOAMDma--
 	}
 
+	// halt AND interrupt is pending
+	interruptPending := (c.memory.Read(INTERRUPT_ENABLE) & c.memory.Read(INTERRUPT_FLAG)) > 0
+	if c.halted && interruptPending {
+		log.Printf("HALT RESUMED bug=%t ime=%d pending=%t\n", c.haltBug, c.ime, interruptPending)
+		c.halted = false
+	}
+
 	// if no opcode was read cycles is 0 (first cycle) or 1 (parallel fetch)
-	if c.opcode == 0 && c.remainingCycles <= 1 {
+	if !c.halted && c.opcode == 0 && c.remainingCycles <= 1 {
 
 		// Interrupts are accepted during the op code fetch cycle of each instruction
 		if c.interruptRequested() {
@@ -657,6 +678,12 @@ func (c *Cpu) sync(cycle int) {
 		// fetch opcode from memory
 		c.opcode = c.fetch()
 
+		// https://gbdev.io/pandocs/halt.html#halt-bug
+		if c.haltBug {
+			c.pc--
+			c.haltBug = false
+		}
+
 		// we should spend 1 machine cycle during read
 		c.remainingCycles = 1
 	}
@@ -665,7 +692,7 @@ func (c *Cpu) sync(cycle int) {
 	// that a cycle was spent fetching and now we should execute.
 	// also we will only proceed after the number of required cycles
 	// is passed (equals to 0)
-	if c.opcode > 0 && c.remainingCycles == 0 {
+	if !c.halted && c.opcode > 0 && c.remainingCycles == 0 {
 
 		// decode - calculate how many cycles per instruction
 		is, operation := c.decode(uint8(c.opcode))
@@ -696,7 +723,7 @@ func (c *Cpu) sync(cycle int) {
 
 			sb.WriteString(fmt.Sprintf("\tREG_B=0x%X\n\tREG_C=0x%X\n\tREG_D=0x%X\n\tREG_E=0x%X\n\tREG_H=0x%X\n\tREG_L=0x%X\n\tREG_A=0x%X\n\tREG_F=0x%X\n", c.reg.r8(reg_b), c.reg.r8(reg_c), c.reg.r8(reg_d), c.reg.r8(reg_e), c.reg.r8(reg_h), c.reg.r8(reg_l), c.reg.r8(reg_a), c.reg.r8(reg_f)))
 
-			sb.WriteString(fmt.Sprintf("\tREG_BC=0x%X\n\tREG_DE=0x%X\n\tREG_HL=0x%X\n\tREG_SP=0x%X\n", c.reg.r16(reg_bc), c.reg.r16(reg_de), c.reg.r16(reg_hl), c.reg.r16(reg_sp)))
+			sb.WriteString(fmt.Sprintf("\tREG_BC=0x%X\n\tREG_DE=0x%X\n\tREG_HL=0x%X\n\tREG_SP=0x%X\n", c.reg.r16(reg_bc), c.reg.r16(reg_de), c.reg.r16(reg_hl), c.sp))
 
 			sb.WriteString(fmt.Sprintf("\tZ_FLAG=%d\n\tN_FLAG=%d\n\tC_FLAG=%d\n\tH_FLAG=%d\n", c.reg.r_flags()&z_flag, c.reg.r_flags()&n_flag, c.reg.r_flags()&c_flag, c.reg.r_flags()&h_flag))
 
@@ -728,7 +755,7 @@ func (c *Cpu) sync(cycle int) {
 
 			sb.WriteString(fmt.Sprintf("\tREG_B=0x%X\n\tREG_C=0x%X\n\tREG_D=0x%X\n\tREG_E=0x%X\n\tREG_H=0x%X\n\tREG_L=0x%X\n\tREG_A=0x%X\n\tREG_F=0x%X\n", c.reg.r8(reg_b), c.reg.r8(reg_c), c.reg.r8(reg_d), c.reg.r8(reg_e), c.reg.r8(reg_h), c.reg.r8(reg_l), c.reg.r8(reg_a), c.reg.r8(reg_f)))
 
-			sb.WriteString(fmt.Sprintf("\tREG_BC=0x%X\n\tREG_DE=0x%X\n\tREG_HL=0x%X\n\tREG_SP=0x%X\n", c.reg.r16(reg_bc), c.reg.r16(reg_de), c.reg.r16(reg_hl), c.reg.r16(reg_sp)))
+			sb.WriteString(fmt.Sprintf("\tREG_BC=0x%X\n\tREG_DE=0x%X\n\tREG_HL=0x%X\n\tREG_SP=0x%X\n", c.reg.r16(reg_bc), c.reg.r16(reg_de), c.reg.r16(reg_hl), c.sp))
 
 			sb.WriteString(fmt.Sprintf("\tZ_FLAG=%d\n\tN_FLAG=%d\n\tC_FLAG=%d\n\tH_FLAG=%d\n", c.reg.r_flags()&z_flag, c.reg.r_flags()&n_flag, c.reg.r_flags()&c_flag, c.reg.r_flags()&h_flag))
 
@@ -758,14 +785,17 @@ func (c *Cpu) sync(cycle int) {
 
 	// check if OAM changed
 	newOam := int(c.memory.Read(PORT_OAM_DMA_CONTROL))
-	if c.scheduledOAMDma == -1 && oam != newOam {
+	if !c.halted && c.scheduledOAMDma == -1 && oam != newOam {
 		log.Printf("SCHEDULED OAM DMA AT 0x%X (PC=0x%.8X)\n", newOam, c.pc)
 		c.scheduledOAMDma = 160 // 1 m-cycle delay
 		c.oamDmaSource = newOam
 	}
 
-	// decrease the number of cycles
-	c.remainingCycles--
+	if !c.halted {
+
+		// decrease the number of cycles
+		c.remainingCycles--
+	}
 }
 
 func (c *Cpu) init() error {

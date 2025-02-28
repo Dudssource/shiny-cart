@@ -10,8 +10,13 @@ func op_inc_r16(c *Cpu, opcode uint8) {
 	// 0b00110000
 	dst := (opcode & 0x30) >> 4
 
-	// INC r16
-	c.reg.w16(dst, c.reg.r16(dst)+1)
+	if dst == reg_sp {
+		// INC SP
+		c.sp++
+	} else {
+		// INC r16
+		c.reg.w16(dst, c.reg.r16(dst)+1)
+	}
 }
 
 // https://rgbds.gbdev.io/docs/v0.7.0/gbz80.7#INC_r8

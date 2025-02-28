@@ -9,8 +9,12 @@ func op_ccf(c *Cpu, _ uint8) {
 	// read flags
 	flags := c.reg.r_flags()
 
-	// read c-flag flipping with XOR
-	flags = (flags ^ c_flag)
+	carry := (flags & c_flag) >> 4
+	if carry == 1 {
+		flags &= ^c_flag
+	} else {
+		flags |= c_flag
+	}
 
 	// save flags
 	c.reg.w_flag(flags)

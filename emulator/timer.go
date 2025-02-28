@@ -37,6 +37,7 @@ func (t *Timer) sync(cycle int) {
 		t.lastDivValue = 0
 		// Reset DIV
 		t.c.memory.Write(PORT_DIV, 0)
+		//log.Printf("RESET DIV\n")
 	} else if cycle%64 == 0 { // 16384 Hz
 		// overflow
 		if currentDivValue+1 > 0xFF {
