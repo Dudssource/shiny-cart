@@ -21,6 +21,9 @@ func TestOpAdd(t *testing.T) {
 			sp:  0xFFF8,
 		}
 
+		_, n := c.decode(0xE8)
+		assert.Equal(t, "add sp, imm8", n)
+
 		op_add_sp_imm8(c, 0)
 		assert.Equal(t, Word(0xFFFA), c.sp)
 	})

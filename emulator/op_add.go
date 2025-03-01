@@ -199,24 +199,32 @@ func op_add_sp_imm8(c *Cpu, _ uint8) {
 	flags &= ^z_flag & ^n_flag & ^c_flag & ^h_flag
 	z := c.fetch()
 
-	var result int16
+	var result int
 
 	// signed
 	if z&0x80 > 0 {
 		z = ^z + 1
-		result = int16(c.sp) - int16(z)
+		result = int(c.sp) - int(z)
+
+		// https://stackoverflow.com/a/7261149
+		if (result & 0xF) <= (int(c.sp & 0xF)) {
+			flags |= h_flag
+		}
+
+		if (result & 0xFF) <= (int(c.sp & 0xFF)) {
+			flags |= c_flag
+		}
+
 	} else {
-		result = int16(c.sp) + int16(z)
-	}
+		result = int(c.sp) + int(z)
 
-	// https://stackoverflow.com/a/57981912
-	if (z&0xF + c.sp.Low()&0xF) > 0xF {
-		flags |= h_flag
-	}
+		if int(c.sp&0xF)+int(z&0xF) > 0xF {
+			flags |= h_flag
+		}
 
-	if (z&0xFF + c.sp.Low()) > 0xFF {
-		flags |= c_flag
-		result = result - 256
+		if int(c.sp&0xFF)+int(z) > 0xFF {
+			flags |= c_flag
+		}
 	}
 
 	c.sp = Word(result)

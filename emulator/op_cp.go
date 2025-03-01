@@ -74,18 +74,20 @@ func cp_a(c *Cpu, nn int) {
 	// A
 	a := int(c.reg.r8(reg_a))
 
+	result := a - int(nn)
+
 	// borrow from bit 3
 	if (a&0xF)-(nn&0xF) < 0 {
 		// set half-carry=on
 		flags |= h_flag
 	}
 
-	result := a - int(nn)
-
 	// r8 > a
-	if result < 0 {
+	if nn > a {
 		flags |= c_flag
-	} else if result == 0 { // zero
+	}
+
+	if result == 0 { // zero
 		flags |= z_flag
 	}
 

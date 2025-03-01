@@ -268,27 +268,36 @@ func op_ld_imm16_a(c *Cpu, _ uint8) {
 // https://rgbds.gbdev.io/docs/v0.7.0/gbz80.7#LD_HL,SP+e8
 func op_ld_sp_e(c *Cpu, _ uint8) {
 	c.requiredCycles = 3
-	z := c.fetch()
 	flags := c.reg.r_flags()
 	flags &= ^z_flag & ^n_flag & ^h_flag & ^c_flag
-	sp := c.sp
+	z := c.fetch()
 
-	var result int16
+	var result int
 
+	// signed
 	if z&0x80 > 0 {
 		z = ^z + 1
-		result = int16(sp) - int16(z)
+		result = int(c.sp) - int(z)
+
+		// https://stackoverflow.com/a/7261149
+		if (result & 0xF) <= (int(c.sp & 0xF)) {
+			flags |= h_flag
+		}
+
+		if (result & 0xFF) <= (int(c.sp & 0xFF)) {
+			flags |= c_flag
+		}
+
 	} else {
-		result = int16(sp) + int16(z)
-	}
+		result = int(c.sp) + int(z)
 
-	// https://stackoverflow.com/a/57981912
-	if (sp.Low()&0xF)+(z&0xF) > 0xF {
-		flags |= h_flag
-	}
+		if int(c.sp&0xF)+int(z&0xF) > 0xF {
+			flags |= h_flag
+		}
 
-	if result > 0xFF {
-		flags |= c_flag
+		if int(c.sp&0xFF)+int(z) > 0xFF {
+			flags |= c_flag
+		}
 	}
 
 	c.reg.w16(reg_hl, Word(result))
