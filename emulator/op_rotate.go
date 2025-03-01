@@ -1,7 +1,7 @@
 package emulator
 
 // https://rgbds.gbdev.io/docs/v0.7.0/gbz80.7#RLCA
-func op_rotate_rlca(c *Cpu, opcode uint8) {
+func op_rotate_rlca(c *Cpu, _ uint8) {
 
 	// m-cycles = 1
 	c.requiredCycles = 1
@@ -22,10 +22,18 @@ func op_rotate_rlca(c *Cpu, opcode uint8) {
 	// set carry=on
 	if (a & 0x80) > 0 {
 		flags |= c_flag
+	} else {
+		flags &= ^c_flag
 	}
+
+	// carry flag
+	carry := (flags & c_flag) >> 4
 
 	// RL
 	a <<= 1
+
+	// circular
+	a |= uint8(carry)
 
 	// A = A << 1 (RL)
 	c.reg.w8(reg_a, a)
@@ -35,7 +43,7 @@ func op_rotate_rlca(c *Cpu, opcode uint8) {
 }
 
 // https://rgbds.gbdev.io/docs/v0.7.0/gbz80.7#RRCA
-func op_rotate_rrca(c *Cpu, opcode uint8) {
+func op_rotate_rrca(c *Cpu, _ uint8) {
 
 	// m-cycles = 1
 	c.requiredCycles = 1
@@ -54,12 +62,20 @@ func op_rotate_rrca(c *Cpu, opcode uint8) {
 
 	// 0b00000001
 	// set carry=on
-	if (a & 0x1) == 1 {
+	if (a & 0x1) > 0 {
 		flags |= c_flag
+	} else {
+		flags &= ^c_flag
 	}
+
+	// carry flag
+	carry := (flags & c_flag) >> 4
 
 	// RR
 	a >>= 1
+
+	// move carry
+	a |= uint8(carry << 7)
 
 	// A = A >> 1 (SR)
 	c.reg.w8(reg_a, a)
@@ -69,16 +85,47 @@ func op_rotate_rrca(c *Cpu, opcode uint8) {
 }
 
 // https://rgbds.gbdev.io/docs/v0.7.0/gbz80.7#RLA
-func op_rotate_rla(c *Cpu, opcode uint8) {
-
-	op_rl_r8(c, reg_a)
+func op_rotate_rla(c *Cpu, _ uint8) {
 
 	// m-cycles = 1
 	c.requiredCycles = 1
+
+	flags := c.reg.r_flags()
+
+	// save current carry flag
+	old_carry := uint8((flags & c_flag) >> 4)
+
+	// reset z, n, h
+	flags &= ^(h_flag | n_flag | z_flag)
+
+	// get operand
+	nn := c.reg.r8(reg_a)
+
+	// get the leftmost bit as the new value for carry
+	new_carry := (nn & 0x80) >> 7
+
+	// shift left by 1
+	nn <<= 1
+
+	// set the rightmost bit as the old carry
+	nn |= old_carry
+
+	// write
+	c.reg.w8(reg_a, nn)
+
+	// set the new carry flag
+	if new_carry > 0 {
+		flags |= c_flag
+	} else {
+		flags &= ^c_flag
+	}
+
+	// save the flags
+	c.reg.w_flag(flags)
 }
 
 // https://rgbds.gbdev.io/docs/v0.7.0/gbz80.7#RRA
-func op_rotate_rra(c *Cpu, opcode uint8) {
+func op_rotate_rra(c *Cpu, _ uint8) {
 
 	// m-cycles = 1
 	c.requiredCycles = 1
@@ -102,6 +149,8 @@ func op_rotate_rra(c *Cpu, opcode uint8) {
 	// set carry=on
 	if (a & 0x1) == 1 {
 		flags |= c_flag
+	} else {
+		flags &= ^c_flag
 	}
 
 	// RR A
@@ -208,13 +257,13 @@ func op_rl_r8(c *Cpu, opcode uint8) {
 	}
 
 	// get the leftmost bit as the new value for carry
-	new_carry := nn & 0x80 >> 7
+	new_carry := (nn & 0x80) >> 7
 
 	// shift left by 1
-	nn = nn & 0x7F << 1
+	nn <<= 1
 
 	// set the rightmost bit as the old carry
-	nn |= old_carry & 0x1
+	nn |= old_carry
 
 	if nn == 0 {
 		flags |= z_flag

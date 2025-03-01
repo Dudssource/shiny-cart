@@ -6,7 +6,7 @@ func op_rrc_r8(c *Cpu, opcode uint8) {
 	c.requiredCycles = 2
 	flags := c.reg.r_flags()
 	flags &= ^(z_flag | h_flag | n_flag | c_flag)
-	dst := opcode & 0x3
+	dst := opcode & 0x7
 
 	var nn uint8
 
@@ -25,6 +25,8 @@ func op_rrc_r8(c *Cpu, opcode uint8) {
 	result := (nn >> 1) | rm
 	if rm > 0 {
 		flags |= c_flag
+	} else {
+		flags &= ^c_flag
 	}
 
 	if result == 0 {

@@ -31,12 +31,12 @@ func op_dec_r8(c *Cpu, opcode uint8) {
 	// flags
 	flags := c.reg.r_flags()
 
-	// subtraction
-	flags |= n_flag
-
 	// disable z_flag by default
 	// disable h_flag by default
 	flags &= (^z_flag & ^h_flag)
+
+	// subtraction
+	flags |= n_flag
 
 	// DEC [HL]
 	if dst == reg_indirect_hl {
@@ -51,7 +51,7 @@ func op_dec_r8(c *Cpu, opcode uint8) {
 		ihl := c.memory.Read(hl)
 
 		// result
-		result := int8(ihl - 1)
+		result := int(ihl - 1)
 
 		// set zero flag
 		if result == 0 {
@@ -59,7 +59,7 @@ func op_dec_r8(c *Cpu, opcode uint8) {
 		}
 
 		// set half-carry flag
-		if int8(ihl&0xF)-1 < 0 {
+		if int(ihl&0xF)-1 < 0 {
 			flags |= h_flag
 		}
 
@@ -75,7 +75,7 @@ func op_dec_r8(c *Cpu, opcode uint8) {
 		r8 := c.reg.r8(dst)
 
 		// DEC r8
-		result := r8 - 1
+		result := int(r8 - 1)
 
 		// zero-flag=on
 		if result == 0 {
@@ -83,12 +83,13 @@ func op_dec_r8(c *Cpu, opcode uint8) {
 		}
 
 		// half-carry=on
-		if int8(r8&0xF)-1 < 0 {
+		if int(r8&0xF)-1 < 0 {
 			flags |= h_flag
+			result = 256 + result
 		}
 
 		// R8--
-		c.reg.w8(dst, result)
+		c.reg.w8(dst, uint8(result))
 	}
 
 	// save flags

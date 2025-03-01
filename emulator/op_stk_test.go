@@ -13,7 +13,7 @@ func TestStk(t *testing.T) {
 		c := &Cpu{
 			pc: 0x0,
 			memory: &Memory{
-				mem: []uint8{},
+				mem: make(memoryArea, 0xFFFF),
 			},
 			reg: Registers{},
 			sp:  0xFFFE,
@@ -24,8 +24,8 @@ func TestStk(t *testing.T) {
 		// PUSH BC
 		op_push_r16stk(c, 0b11000101)
 		assert.Equal(t, Word(0xFFFC), c.sp)
-		assert.Equal(t, uint8(0xFF), c.stack[0xFFFD])
-		assert.Equal(t, uint8(0xFC), c.stack[0xFFFC])
+		assert.Equal(t, uint8(0xFF), c.memory.Read(0xFFFD))
+		assert.Equal(t, uint8(0xFC), c.memory.Read(0xFFFC))
 	})
 
 	t.Run("test 2", func(t *testing.T) {
@@ -33,7 +33,7 @@ func TestStk(t *testing.T) {
 		c := &Cpu{
 			pc: 0x0,
 			memory: &Memory{
-				mem: []uint8{},
+				mem: make(memoryArea, 0xFFFF),
 			},
 			reg: Registers{},
 			sp:  0xFFFE,

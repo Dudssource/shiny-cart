@@ -270,8 +270,8 @@ func op_ld_sp_e(c *Cpu, _ uint8) {
 	c.requiredCycles = 3
 	z := c.fetch()
 	flags := c.reg.r_flags()
-	flags &= ^z_flag & ^n_flag
-	sp := c.sp.Low()
+	flags &= ^z_flag & ^n_flag & ^h_flag & ^c_flag
+	sp := c.sp
 
 	var result int16
 
@@ -283,16 +283,18 @@ func op_ld_sp_e(c *Cpu, _ uint8) {
 	}
 
 	// https://stackoverflow.com/a/57981912
-	if (sp&0xF)+(z&0xF) > 0xF {
+	if (sp.Low()&0xF)+(z&0xF) > 0xF {
 		flags |= h_flag
 	}
 
 	if result > 0xFF {
 		flags |= c_flag
-		result = result - 256
 	}
 
-	c.reg.w16(reg_hl, NewWord(c.sp.High(), uint8(result)))
+	c.reg.w16(reg_hl, Word(result))
+
+	// save flags
+	c.reg.w_flag(flags)
 }
 
 // https://rgbds.gbdev.io/docs/v0.7.0/gbz80.7#LD_SP,HL

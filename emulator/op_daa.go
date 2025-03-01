@@ -21,6 +21,9 @@ func op_daa(c *Cpu, _ uint8) {
 	// half-carry flag
 	hf := (flags & h_flag) > 0
 
+	// reset c-flag
+	flags &= ^(c_flag | z_flag | h_flag)
+
 	if !nf {
 		if cf || a > 0x99 {
 			a += 0x60
@@ -41,9 +44,6 @@ func op_daa(c *Cpu, _ uint8) {
 	if a == 0 {
 		flags |= z_flag
 	}
-
-	// turn half-carry flag off
-	flags &= ^h_flag
 
 	// SAVE A
 	c.reg.w8(reg_a, a)

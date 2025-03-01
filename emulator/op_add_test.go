@@ -114,4 +114,80 @@ func TestOpAdd(t *testing.T) {
 		assert.True(t, c.reg.r_flags()&c_flag > 0)
 		assert.True(t, c.reg.r_flags()&z_flag > 0)
 	})
+
+	t.Run("test 6", func(t *testing.T) {
+
+		c := &Cpu{
+			pc: 0x0,
+			memory: &Memory{
+				mem: []uint8{
+					0xFE,
+				},
+			},
+			reg: Registers{},
+			sp:  0xFFF8,
+		}
+
+		c.reg.w8(reg_a, 0xE1)
+		c.reg.w8(reg_e, 0x0F)
+		c.reg.w_flag(c_flag)
+
+		// ADC A, E
+		op_adc_a_r8(c, 0b10001011)
+		assert.Equal(t, uint8(0xF1), c.reg.r8(reg_a))
+		assert.True(t, c.reg.r_flags()&z_flag == 0)
+		assert.True(t, c.reg.r_flags()&h_flag > 0)
+		assert.True(t, c.reg.r_flags()&c_flag == 0)
+	})
+
+	t.Run("test 7", func(t *testing.T) {
+
+		c := &Cpu{
+			pc: 0x0,
+			memory: &Memory{
+				mem: []uint8{
+					0x3B,
+				},
+			},
+			reg: Registers{},
+			sp:  0xFFF8,
+		}
+
+		c.reg.w8(reg_a, 0xE1)
+		c.reg.w8(reg_e, 0x0F)
+		c.reg.w_flag(c_flag)
+
+		// ADC A, 0x3B
+		op_adc_a_imm8(c, 0b11001110)
+		assert.Equal(t, uint8(0x1D), c.reg.r8(reg_a))
+		assert.True(t, c.reg.r_flags()&z_flag == 0)
+		assert.True(t, c.reg.r_flags()&h_flag == 0)
+		assert.True(t, c.reg.r_flags()&c_flag > 0)
+	})
+
+	t.Run("test 8", func(t *testing.T) {
+
+		c := &Cpu{
+			pc: 0x0,
+			memory: &Memory{
+				mem: []uint8{
+					0x3B,
+					0x1E,
+				},
+			},
+			reg: Registers{},
+			sp:  0xFFF8,
+		}
+
+		c.reg.w8(reg_a, 0xE1)
+		c.reg.w16(reg_hl, 0x1)
+		c.reg.w_flag(c_flag)
+
+		// ADC A, (HL)
+		op_adc_a_r8(c, 0b10001110)
+		assert.Equal(t, uint8(0x00), c.reg.r8(reg_a))
+		assert.True(t, c.reg.r_flags()&z_flag > 0)
+		assert.True(t, c.reg.r_flags()&h_flag > 0)
+		assert.True(t, c.reg.r_flags()&c_flag > 0)
+	})
 }

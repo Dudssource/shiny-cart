@@ -9,6 +9,10 @@ func op_ccf(c *Cpu, _ uint8) {
 	// read flags
 	flags := c.reg.r_flags()
 
+	// h-flag=off
+	// n-flag=off
+	flags &= ^(h_flag | n_flag)
+
 	carry := (flags & c_flag) >> 4
 	if carry == 1 {
 		flags &= ^c_flag

@@ -8,10 +8,15 @@ import (
 
 func TestOpDaa(t *testing.T) {
 
-	c := &Cpu{}
-	c.init()
-
 	t.Run("half carry on", func(t *testing.T) {
+		c := &Cpu{
+			pc: 0x0,
+			memory: &Memory{
+				mem: make(memoryArea, 0xFFFF),
+			},
+			reg: Registers{},
+			sp:  0xFFFE,
+		}
 		c.reg.w8(reg_a, 0x3C)
 		c.reg.w_flag(h_flag)
 		op_daa(c, 0x0)
@@ -19,6 +24,14 @@ func TestOpDaa(t *testing.T) {
 	})
 
 	t.Run("op ld inc", func(t *testing.T) {
+		c := &Cpu{
+			pc: 0x0,
+			memory: &Memory{
+				mem: make(memoryArea, 0xFFFF),
+			},
+			reg: Registers{},
+			sp:  0xFFFE,
+		}
 		c.pc = 0x1
 		c.memory.Write(0x1, 0x09)
 

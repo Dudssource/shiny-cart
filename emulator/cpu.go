@@ -48,7 +48,6 @@ type Opcodes struct {
 
 type Cpu struct {
 	memory *Memory // 8-bit address bus
-	stack  [65536]uint8
 
 	pc Word // program counter
 	sp Word // stack pointer

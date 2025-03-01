@@ -21,7 +21,7 @@ func op_add_hl_r16(c *Cpu, opcode uint8) {
 	var nn Word
 
 	// SP
-	if dst == 0x3 {
+	if dst == reg_sp {
 		nn = c.sp
 	} else {
 		// nn = r16
@@ -35,7 +35,7 @@ func op_add_hl_r16(c *Cpu, opcode uint8) {
 	result := int32(hl) + int32(nn)
 
 	// if result is greater than 0xFFF, set half-carry=on (bit 11)
-	if (hl.High()&0xF + nn.High()&0xF) > 0xF {
+	if (hl&0xFFF + nn&0xFFF) > 0xFFF {
 		flags |= h_flag
 	}
 
@@ -82,7 +82,7 @@ func op_add_a_r8(c *Cpu, opcode uint8) {
 	}
 
 	// A
-	add_a(c, nn)
+	add_a(c, nn, 0)
 }
 
 // https://rgbds.gbdev.io/docs/v0.7.0/gbz80.7#ADC_A,r8
@@ -93,7 +93,8 @@ func op_adc_a_r8(c *Cpu, opcode uint8) {
 	dst := (opcode & 0x7)
 
 	var (
-		nn uint8 = uint8((c.reg.r_flags() & c_flag) >> 4)
+		nn    uint8
+		carry = (c.reg.r_flags() & c_flag) >> 4
 	)
 
 	// ADC A, [HL]
@@ -106,7 +107,7 @@ func op_adc_a_r8(c *Cpu, opcode uint8) {
 		hl := c.reg.r16(reg_hl)
 
 		// mem[HL]
-		nn += c.memory.Read(hl)
+		nn = c.memory.Read(hl)
 
 	} else {
 
@@ -114,11 +115,11 @@ func op_adc_a_r8(c *Cpu, opcode uint8) {
 		c.requiredCycles = 1
 
 		// nn = r8
-		nn += c.reg.r8(dst)
+		nn = c.reg.r8(dst)
 	}
 
 	// A
-	add_a(c, nn)
+	add_a(c, nn, carry)
 }
 
 // https://rgbds.gbdev.io/docs/v0.7.0/gbz80.7#ADD_A,n8
@@ -131,7 +132,7 @@ func op_add_a_imm8(c *Cpu, _ uint8) {
 	nn := c.fetch()
 
 	// A
-	add_a(c, nn)
+	add_a(c, nn, 0)
 }
 
 // https://rgbds.gbdev.io/docs/v0.7.0/gbz80.7#ADC_A,n8
@@ -141,17 +142,17 @@ func op_adc_a_imm8(c *Cpu, _ uint8) {
 	c.requiredCycles = 2
 
 	// carry
-	carry := uint8((c.reg.r_flags() & c_flag) >> 4)
+	carry := (c.reg.r_flags() & c_flag) >> 4
 
 	// mem[PC]
 	nn := c.fetch()
 
 	// A
-	add_a(c, nn+carry)
+	add_a(c, nn, carry)
 }
 
 // add_a ADD A, R8|IMM8|[HL]
-func add_a(c *Cpu, nn uint8) {
+func add_a(c *Cpu, nn uint8, carry flag) {
 
 	// read flags
 	flags := c.reg.r_flags()
@@ -166,12 +167,12 @@ func add_a(c *Cpu, nn uint8) {
 	a := c.reg.r8(reg_a)
 
 	// if result is greater than 0xF, set half-carry=on (bit 3)
-	if (a&0xF + nn&0xF) > 0xF {
+	if (a&0xF + nn&0xF + uint8(carry)) > 0xF {
 		flags |= h_flag
 	}
 
 	// A + NN
-	result := int16(a) + int16(nn)
+	result := int16(a) + int16(nn) + int16(carry)
 
 	// if result is greater than 0xFF, set carry=on (bit 7)
 	if result > 0xFF {
@@ -209,14 +210,17 @@ func op_add_sp_imm8(c *Cpu, _ uint8) {
 	}
 
 	// https://stackoverflow.com/a/57981912
-	if (z&0xF + c.sp.Low()) > 0xF {
+	if (z&0xF + c.sp.Low()&0xF) > 0xF {
 		flags |= h_flag
 	}
 
-	if result > 0xFF {
+	if (z&0xFF + c.sp.Low()) > 0xFF {
 		flags |= c_flag
 		result = result - 256
 	}
 
 	c.sp = Word(result)
+
+	// save flags
+	c.reg.w_flag(flags)
 }

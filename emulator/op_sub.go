@@ -33,7 +33,7 @@ func op_sub_a_r8(c *Cpu, opcode uint8) {
 	}
 
 	// SUB A
-	sub_a(c, nn)
+	sub_a(c, nn, 0)
 }
 
 // https://rgbds.gbdev.io/docs/v0.7.0/gbz80.7#SUB_A,n8
@@ -46,7 +46,7 @@ func op_sub_a_imm8(c *Cpu, opcode uint8) {
 	nn := int(c.fetch())
 
 	// SUB A
-	sub_a(c, nn)
+	sub_a(c, nn, 0)
 }
 
 // https://rgbds.gbdev.io/docs/v0.7.0/gbz80.7#SBC_A,n8
@@ -56,13 +56,13 @@ func op_sbc_a_imm8(c *Cpu, _ uint8) {
 	c.requiredCycles = 2
 
 	// carry
-	carry := int((c.reg.r_flags() & c_flag) >> 4)
+	carry := (c.reg.r_flags() & c_flag) >> 4
 
 	// mem[PC]
 	nn := int(c.fetch())
 
 	// SBC A
-	sub_a(c, nn+carry)
+	sub_a(c, nn, carry)
 }
 
 // https://rgbds.gbdev.io/docs/v0.7.0/gbz80.7#SBC_A,r8
@@ -73,7 +73,8 @@ func op_sbc_a_r8(c *Cpu, opcode uint8) {
 
 	var (
 		// nn = carry
-		nn int = int((c.reg.r_flags() & c_flag) >> 4)
+		nn    int
+		carry = (c.reg.r_flags() & c_flag) >> 4
 	)
 
 	// SUB a, [HL]
@@ -86,7 +87,7 @@ func op_sbc_a_r8(c *Cpu, opcode uint8) {
 		hl := c.reg.r16(reg_hl)
 
 		// mem[HL]
-		nn += int(c.memory.Read(hl))
+		nn = int(c.memory.Read(hl))
 
 	} else {
 
@@ -94,37 +95,37 @@ func op_sbc_a_r8(c *Cpu, opcode uint8) {
 		c.requiredCycles = 1
 
 		// nn
-		nn += int(c.reg.r8(dst))
+		nn = int(c.reg.r8(dst))
 	}
 
 	// SUB A
-	sub_a(c, nn)
+	sub_a(c, nn, carry)
 }
 
 // sub_a SUB A, R8|IMM8|[HL]
-func sub_a(c *Cpu, nn int) {
+func sub_a(c *Cpu, nn int, carry flag) {
 
 	// read flags
 	flags := c.reg.r_flags()
-
-	// set n_flag=on
-	flags |= n_flag
 
 	// set z_flag=off
 	// set c_flag=off
 	// set h_flag=off
 	flags &= ^(z_flag | c_flag | h_flag)
 
+	// set n_flag=on
+	flags |= n_flag
+
 	// A
 	a := int(c.reg.r8(reg_a))
 
 	// borrow from bit 3
-	if (a&0xF)-(nn&0xF) < 0 {
+	if (a&0xF - nn&0xF - int(carry)) < 0 {
 		// set half-carry=on
 		flags |= h_flag
 	}
 
-	result := a - int(nn)
+	result := a - int(nn) - int(carry)
 
 	// r8 > a
 	if result < 0 {

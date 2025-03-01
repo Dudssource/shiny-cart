@@ -17,12 +17,15 @@ func op_sla_r8(c *Cpu, opcode uint8) {
 		nn = c.reg.r8(r8)
 	}
 
-	result := uint16(nn << 1)
+	result := int16(nn << 1)
 
-	if result > 255 {
+	if nn&0x80 > 0 {
 		flags |= c_flag
-		result = 256 - result
-	} else if result == 0 {
+	} else {
+		flags &= ^c_flag
+	}
+
+	if result == 0 {
 		flags |= z_flag
 	}
 

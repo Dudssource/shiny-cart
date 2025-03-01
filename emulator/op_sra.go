@@ -21,10 +21,12 @@ func op_sra_r8(c *Cpu, opcode uint8) {
 	sign := nn & 0x80
 
 	// arithmetical right shift
-	result := uint16((nn >> 1) | sign)
+	result := int16(nn>>1) | int16(sign)
 
 	if nn&0x1 > 0 {
 		flags |= c_flag
+	} else {
+		flags &= ^c_flag
 	}
 
 	if result == 0 {
