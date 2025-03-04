@@ -1,5 +1,7 @@
 package emulator
 
+import "log"
+
 // https://gbdev.io/pandocs/Memory_Map.html#memory-map
 const (
 	ROM_BANK_00_START = Word(0x0000)
@@ -21,14 +23,17 @@ const (
 type memoryArea []uint8
 
 type Memory struct {
-	mem memoryArea // 8-bit address bus, 64kb memory
-	rom memoryArea // ROM area
-	mbc *Mbc
+	mem    memoryArea // 8-bit address bus, 64kb memory
+	rom    memoryArea // ROM area
+	mbc    *Mbc
+	joypad uint8
+	dma    bool
 }
 
 func NewMemory() *Memory {
 	return &Memory{
-		mbc: NewMbc(),
+		mbc:    NewMbc(),
+		joypad: 0xFF,
 	}
 }
 
@@ -43,7 +48,15 @@ func (m *Memory) Read(address Word) uint8 {
 
 	// unreadable bits return 1
 	if address == PORT_JOYPAD {
-		return rVal | 0xC0
+		rVal |= 0xCF
+		state := m.joypad
+		if rVal&0x20 == 0 {
+			rVal = (rVal & 0xF0) | ((state & 0xF0) >> 4)
+		}
+		if rVal&0x10 == 0 {
+			rVal = (rVal & 0xF0) | (state & 0xF)
+		}
+		return rVal
 	} else if address == PORT_SERIAL_TRANSFER_SC {
 		return rVal | 0x7E
 	} else if address == PORT_TAC {
@@ -95,6 +108,30 @@ func (m *Memory) Read(address Word) uint8 {
 }
 
 func (m *Memory) Write(address Word, value uint8) {
+
+	if address == PORT_DIV {
+		log.Printf("RESET TIMER %d\n", value)
+		// reset timer
+		m.mem[address] = 0x0
+		return
+	}
+
+	if address == INTERRUPT_ENABLE {
+		log.Printf("INTERRUPT ENABLE %.8b\n", value)
+	}
+
+	if address == PORT_JOYPAD {
+		// write JP
+		m.mem[address] = (value & 0x30) | (m.mem[address] & 0xCF)
+		return
+	}
+
+	if address == PORT_OAM_DMA_CONTROL {
+		// write DMA
+		m.mem[address] = value
+		m.dma = true
+		return
+	}
 
 	// intercepts ROM and RAM memory writes
 	if m.mbc != nil && m.mbc.initialized() && ownedByMBC(address) {

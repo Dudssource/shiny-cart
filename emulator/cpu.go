@@ -52,7 +52,8 @@ type Cpu struct {
 	pc Word // program counter
 	sp Word // stack pointer
 
-	ime uint8 // interrupt master enable
+	ime      uint8 // interrupt master enable
+	enableEI bool  // delay EI
 
 	remainingCycles int
 	opcode          uint8
@@ -104,50 +105,9 @@ func (c *Cpu) setup(mode Mode) {
 		c.memory.Write(INTERRUPT_FLAG, 0xE1)
 		c.memory.Write(PORT_SERIAL_TRANSFER_SC, 0x7E)
 		c.memory.Write(PORT_SERIAL_TRANSFER_SB, 0x00)
-		c.memory.Write(PORT_JOYPAD, 0xCF)
+		c.memory.mem[PORT_JOYPAD] = 0xCF // must bypass write method
 
-		// r, err := os.ReadFile("./test-roms/dmg_boot.bin")
-		// if err != nil {
-		// 	panic(err)
-		// }
-
-		// for addr, v := range r {
-		// 	c.memory.Write(Word(addr), v)
-		// }
-		// c.pc = 0x0
-
-		// logo := []uint8{
-		// 	0xce, 0xed, 0x66, 0x66, 0xcc, 0x0d, 0x00, 0x0b, 0x03, 0x73, 0x00, 0x83, 0x00, 0x0c, 0x00, 0x0d, 0x00, 0x08, 0x11, 0x1f, 0x88, 0x89, 0x00, 0x0e, 0xdc, 0xcc, 0x6e, 0xe6, 0xdd, 0xdd, 0xd9, 0x99, 0xbb, 0xbb, 0x67, 0x63, 0x6e, 0x0e, 0xec, 0xcc, 0xdd, 0xdc, 0x99, 0x9f, 0xbb, 0xb9, 0x33, 0x3e,
-		// }
-
-		// for i := range logo {
-		// 	data := logo[i]
-		// 	c.memory.Write(Word(0x0104+i), data)
-		// }
-
-		// c.memory.Write(0x014D, 17)
-		c.scheduledOAMDma = -1
 	}
-}
-
-func (c *Cpu) decompressAndCopy(data uint8, addr Word) {
-	mask0 := uint8(0b00000001)
-	mask1 := uint8(0b00000011)
-	res := uint8(0)
-	for i := 0; i < 4; i++ {
-		if (data & mask0) > 0 {
-			res |= mask1
-		} else {
-			res |= 0
-		}
-		mask0 <<= 1
-		mask1 <<= 2
-	}
-
-	c.memory.Write(addr, res)
-	c.memory.Write(addr+2, res)
-	//*addr = res
-	//*(addr+2) = res
 }
 
 func (c *Cpu) decode(opcode uint8) (instruction, string) {
@@ -497,7 +457,9 @@ func (c *Cpu) interruptRequested() bool {
 
 	if (iflag&ienable)&0x1 > 0 {
 
-		log.Printf("VBLANK INTERRUPT REQUESTED IFLAG=%.8b IENABLE=%.8b\n", iflag, ienable)
+		if c.debug {
+			log.Printf("VBLANK INTERRUPT REQUESTED IFLAG=%.8b IENABLE=%.8b\n", iflag, ienable)
+		}
 
 		// 4 cycles to begin the interruption
 		c.requiredCycles = 4
@@ -514,7 +476,9 @@ func (c *Cpu) interruptRequested() bool {
 
 	} else if (iflag&ienable)&0x2 > 0 {
 
-		log.Printf("LCDC/STAT INTERRUPT REQUESTED IFLAG=%.8b IENABLE=%.8b\n", iflag, ienable)
+		if c.debug {
+			log.Printf("LCDC/STAT INTERRUPT REQUESTED IFLAG=%.8b IENABLE=%.8b\n", iflag, ienable)
+		}
 
 		// 4 cycles to begin the interruption
 		c.requiredCycles = 4
@@ -531,7 +495,9 @@ func (c *Cpu) interruptRequested() bool {
 
 	} else if (iflag&ienable)&0x4 > 0 {
 
-		log.Printf("TIMER INTERRUPT REQUESTED IFLAG=%.8b IENABLE=%.8b\n", iflag, ienable)
+		if c.debug {
+			log.Printf("TIMER INTERRUPT REQUESTED IFLAG=%.8b IENABLE=%.8b\n", iflag, ienable)
+		}
 
 		// 4 cycles to begin the interruption
 		c.requiredCycles = 4
@@ -548,7 +514,9 @@ func (c *Cpu) interruptRequested() bool {
 
 	} else if (iflag&ienable)&0x8 > 0 {
 
-		log.Printf("SERIAL INTERRUPT REQUESTED IFLAG=%.8b IENABLE=%.8b\n", iflag, ienable)
+		if c.debug {
+			log.Printf("SERIAL INTERRUPT REQUESTED IFLAG=%.8b IENABLE=%.8b\n", iflag, ienable)
+		}
 
 		// 4 cycles to begin the interruption
 		c.requiredCycles = 4
@@ -585,7 +553,9 @@ func (c *Cpu) interruptRequested() bool {
 		return false
 	}
 
-	log.Printf("INTERRUPT ACKNOWLEDGED IFLAG=%.8b IENABLE=%.8b\n", iflag, ienable)
+	if c.debug {
+		log.Printf("INTERRUPT ACKNOWLEDGED IFLAG=%.8b IENABLE=%.8b\n", iflag, ienable)
+	}
 
 	// acknowledge
 	c.memory.Write(INTERRUPT_FLAG, iflag)
@@ -635,19 +605,15 @@ func (c *Cpu) sync(cycle int) {
 		}
 	}
 
-	// handle OAM request
-	oam := int(c.memory.Read(PORT_OAM_DMA_CONTROL))
-
-	if !c.halted && c.scheduledOAMDma >= 0 {
+	if !c.halted && c.scheduledOAMDma >= 0 && !c.memory.dma {
 		if c.scheduledOAMDma < 160 {
 			rSrcAddr := NewWord(uint8(c.oamDmaSource), 0x0) + Word(159-c.scheduledOAMDma)
 			rTgtAddr := Word(0xFE00 + 159 - Word(c.scheduledOAMDma))
 			rVal := c.memory.Read(rSrcAddr)
-			log.Printf("COPY OAM DMA 0x%X FROM 0x%X TO 0x%X (PC=0x%.8X, IDX=%d)\n", rVal, rSrcAddr, rTgtAddr, c.pc, c.scheduledOAMDma)
+			if c.debug {
+				log.Printf("COPY OAM DMA 0x%X FROM 0x%X TO 0x%X (PC=0x%.8X, IDX=%d)\n", rVal, rSrcAddr, rTgtAddr, c.pc, c.scheduledOAMDma)
+			}
 			c.memory.Write(rTgtAddr, rVal)
-			//if c.scheduledOAMDma == 0x0 {
-			//log.Printf("Finished OAM\n")
-			//}
 		}
 		c.scheduledOAMDma--
 	}
@@ -655,7 +621,9 @@ func (c *Cpu) sync(cycle int) {
 	// halt AND interrupt is pending
 	interruptPending := (c.memory.Read(INTERRUPT_ENABLE) & c.memory.Read(INTERRUPT_FLAG)) > 0
 	if c.halted && interruptPending {
-		log.Printf("HALT RESUMED bug=%t ime=%d pending=%t\n", c.haltBug, c.ime, interruptPending)
+		if c.debug {
+			log.Printf("HALT RESUMED bug=%t ime=%d pending=%t\n", c.haltBug, c.ime, interruptPending)
+		}
 		c.halted = false
 	}
 
@@ -664,14 +632,11 @@ func (c *Cpu) sync(cycle int) {
 
 		// Interrupts are accepted during the op code fetch cycle of each instruction
 		if c.interruptRequested() {
-
-			// how many cycles for instruction
-			c.remainingCycles = c.requiredCycles
-
-			log.Printf("INTERRUPT PC=0x%X SP=0x%X IME=%d\n", c.pc, c.sp, c.ime)
-
-			// nop
-			return
+			ienable := c.memory.Read(INTERRUPT_ENABLE)
+			iflag := c.memory.Read(INTERRUPT_FLAG)
+			if c.debug {
+				log.Printf("INTERRUPT PC=0x%X SP=0x%X IME=%d IE=%.8b IF=%.8b\n", c.pc, c.sp, c.ime, ienable, iflag)
+			}
 		}
 
 		// fetch opcode from memory
@@ -683,7 +648,6 @@ func (c *Cpu) sync(cycle int) {
 			c.haltBug = false
 		}
 
-		// we should spend 1 machine cycle during read
 		c.remainingCycles = 1
 	}
 
@@ -692,6 +656,14 @@ func (c *Cpu) sync(cycle int) {
 	// also we will only proceed after the number of required cycles
 	// is passed (equals to 0)
 	if !c.halted && c.opcode > 0 && c.remainingCycles == 0 {
+
+		if c.enableEI {
+			c.ime = 1
+			if c.debug {
+				log.Println("ENABLE EI")
+			}
+			c.enableEI = false
+		}
 
 		// decode - calculate how many cycles per instruction
 		is, operation := c.decode(uint8(c.opcode))
@@ -778,16 +750,31 @@ func (c *Cpu) sync(cycle int) {
 			return
 		}
 
-		// reset opcode
-		c.opcode = 0x0
+		if c.remainingCycles == 1 {
+
+			// Interrupts are accepted during the op code fetch cycle of each instruction
+			if c.interruptRequested() && c.debug {
+				log.Printf("INTERRUPT PC=0x%X SP=0x%X IME=%d\n", c.pc, c.sp, c.ime)
+			}
+
+			// fetch opcode from memory
+			c.opcode = c.fetch()
+
+		} else {
+			// reset opcode
+			c.opcode = 0x0
+		}
 	}
 
-	// check if OAM changed
-	newOam := int(c.memory.Read(PORT_OAM_DMA_CONTROL))
-	if !c.halted && c.scheduledOAMDma == -1 && oam != newOam {
-		log.Printf("SCHEDULED OAM DMA AT 0x%X (PC=0x%.8X)\n", newOam, c.pc)
+	// handle OAM request
+	oam := int(c.memory.Read(PORT_OAM_DMA_CONTROL))
+	if !c.halted && c.memory.dma {
+		if c.debug {
+			log.Printf("SCHEDULED OAM DMA AT 0x%X (PC=0x%.8X)\n", oam, c.pc)
+		}
 		c.scheduledOAMDma = 160 // 1 m-cycle delay
-		c.oamDmaSource = newOam
+		c.oamDmaSource = oam
+		c.memory.dma = false // acknowledge DMA
 	}
 
 	if !c.halted {

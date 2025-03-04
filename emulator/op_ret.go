@@ -22,7 +22,9 @@ func op_reti(c *Cpu, opcode uint8) {
 	// enable interrupts
 	c.ime = 1
 
-	log.Println("DISABLE RETI")
+	if c.debug {
+		log.Println("DISABLE RETI")
+	}
 }
 
 // https://rgbds.gbdev.io/docs/v0.7.0/gbz80.7#RET_cc

@@ -23,6 +23,7 @@ func NewGameBoy(debug, step, silent, profiling bool, breakPoints string) *GameBo
 	if step {
 		debug = true
 	}
+
 	c := &Cpu{
 		step:        step,
 		silent:      silent,
@@ -34,8 +35,8 @@ func NewGameBoy(debug, step, silent, profiling bool, breakPoints string) *GameBo
 
 	return &GameBoy{
 		c:      c,
-		joypad: NewJoypad(c),
 		timer:  NewTimer(c),
+		joypad: NewJoypad(c.memory),
 		video: &Video{
 			mem:  c.memory,
 			mode: 2,
@@ -144,6 +145,7 @@ func (g *GameBoy) Loop(interval time.Duration) error {
 					}
 				}
 			}
+
 		}
 	}(g, fps, stop)
 
@@ -196,7 +198,7 @@ func (g *GameBoy) init() error {
 
 func (g *GameBoy) broadcast(cycle int) {
 	g.joypad.sync(cycle)
-	g.timer.sync(cycle)
 	g.c.sync(cycle)
+	g.timer.sync(cycle)
 	g.video.scan(g.c)
 }

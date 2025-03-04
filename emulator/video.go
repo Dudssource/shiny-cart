@@ -147,7 +147,7 @@ func (v *Video) readOAMSprite(addr Word) Sprite {
 }
 
 func (v *Video) shouldAddToBuffer(sprite Sprite) bool {
-	return len(v.buffer) < 10 && sprite.xPos >= 0 && v.scanline >= int(sprite.yPos) && int(sprite.yPos)+int(v.height()) > v.scanline
+	return len(v.buffer) < 10 && v.scanline >= int(sprite.yPos) && int(sprite.yPos)+int(v.height()) > v.scanline
 }
 
 // func (v *Video) fetchWindow() [256][256]Pixel {
@@ -214,53 +214,34 @@ func (v *Video) fetchTile(tileNumber, mode, size uint8) Tile {
 	return tile
 }
 
-func (v *Video) renderbg(row int) {
-	//fmt.Println("LOOP")
-	tilemap := 0x9800
-	mode := v.mem.Read(LCDC_REGISTER) & 0x10 >> 4
-
-	SCY := int(v.mem.Read(0xff42))
-	SCX := int(v.mem.Read(0xff43))
-
-	for j := 0; j < 256; j++ {
-
-		offY := row + SCY
-		offX := j + SCX
-
-		tilenr := v.mem.Read(Word(tilemap + ((offY / 8 * 32) + (offX / 8))))
-
-		var tiledata int
-
-		if mode == 1 {
-			tiledata = (int(tilenr) * 16) + 0x8000
-		} else {
-			// check sign bit
-			signed := ((tilenr & 0x80) >> 7) > 0
-			if signed {
-				tiledata = 0x9000 - (int(^tilenr+1) * 16)
-			} else {
-				tiledata = 0x9000 + (int(tilenr) * 16)
-			}
-		}
-
-		//tiledata = 0x8000
-
-		v.videoMemory[row][j] = Pixel((v.mem.Read(Word(tiledata+(offY%8*2))) >> (7 - (offX % 8)) & 0x1) + (v.mem.Read(Word(tiledata+(offY%8*2)+1))>>(7-(offX%8))&0x1)*2)
-	}
-}
-
 func (v *Video) draw() {
 
 	rl.BeginDrawing()
 	rl.ClearBackground(rl.RayWhite)
 	defer rl.EndDrawing()
 
+	// https://www.deviantart.com/thewolfbunny64/art/Game-Boy-Palette-Lime-Midori-810574708
+	// colors := map[Pixel]color.RGBA{
+	// 	0: rl.NewColor(224, 235, 175, 255),
+	// 	1: rl.NewColor(170, 207, 83, 255),
+	// 	2: rl.NewColor(123, 141, 66, 255),
+	// 	3: rl.NewColor(71, 89, 80, 255),
+	// }
+
+	// https://www.deviantart.com/thewolfbunny64/art/Game-Boy-Palette-Pokemon-Pinball-Ver-882658817
 	colors := map[Pixel]color.RGBA{
-		0: rl.RayWhite,
-		1: rl.LightGray,
-		2: rl.DarkGray,
-		3: rl.Black,
+		0: rl.NewColor(232, 248, 184, 255),
+		1: rl.NewColor(160, 176, 80, 255),
+		2: rl.NewColor(120, 96, 48, 255),
+		3: rl.NewColor(24, 24, 32, 255),
 	}
+
+	// colors := map[Pixel]color.RGBA{
+	// 	0: rl.RayWhite,
+	// 	1: rl.LightGray,
+	// 	2: rl.DarkGray,
+	// 	3: rl.Black,
+	// }
 
 	// Draw
 	for y := 0; y < 144; y++ {
@@ -458,7 +439,7 @@ func (v *Video) scan(c *Cpu) {
 			for _, o := range v.buffer {
 
 				// if v.scancolumn > int(o.xPos+8) && int(o.xPos+15) > v.scancolumn {
-				if v.scancolumn >= int(o.xPos) && int(o.xPos+7) > v.scancolumn {
+				if v.scancolumn >= int(o.xPos) && int(o.xPos+(v.height())) > v.scancolumn {
 
 					sprite := v.fetchTile(o.tile, 1, v.height())
 
