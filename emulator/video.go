@@ -439,14 +439,14 @@ func (v *Video) scan(c *Cpu) {
 			for _, o := range v.buffer {
 
 				// if v.scancolumn > int(o.xPos+8) && int(o.xPos+15) > v.scancolumn {
-				if v.scancolumn >= int(o.xPos) && int(o.xPos+(v.height())) > v.scancolumn {
+				if v.scancolumn >= int(o.xPos) && int(o.xPos+8) > v.scancolumn {
 
 					sprite := v.fetchTile(o.tile, 1, v.height())
 
 					// vertical flip
 					if o.flags&0x40 > 0 {
 						cmp := sprite
-						for fy := range 8 {
+						for fy := range v.height() {
 							sprite[7-fy] = cmp[fy]
 						}
 					}
@@ -454,14 +454,14 @@ func (v *Video) scan(c *Cpu) {
 					// horizontal flip
 					if o.flags&0x20 > 0 {
 						cmp := sprite
-						for fy := range 8 {
+						for fy := range v.height() {
 							for fx := range 8 {
 								sprite[fy][7-fx] = cmp[fy][fx]
 							}
 						}
 					}
 
-					py := (v.scanline - int(o.yPos)) % 8
+					py := (v.scanline - int(o.yPos)) % int(v.height())
 					px := (v.scancolumn - int(o.xPos)) % 8
 					pixel := sprite[py][px]
 
