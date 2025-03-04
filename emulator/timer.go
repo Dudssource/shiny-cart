@@ -61,7 +61,9 @@ func (t *Timer) sync(cycle int) {
 			tma := t.c.memory.Read(PORT_TMA)
 			iflag := t.c.memory.Read(INTERRUPT_FLAG)
 
-			log.Printf("TIMA=%d, CYCLE %d, FREQ=%d, TMA=%d, IFLAG=%.8b\n", currentTimaValue, cycle, timaFrequency, tma, iflag)
+			if t.c.debug {
+				log.Printf("TIMA=%d, CYCLE %d, FREQ=%d, TMA=%d, IFLAG=%.8b\n", currentTimaValue, cycle, timaFrequency, tma, iflag)
+			}
 
 			// set TIMA as TMA (Modulo)
 			t.c.memory.Write(PORT_TIMA, tma)
