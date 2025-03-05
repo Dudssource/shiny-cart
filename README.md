@@ -8,7 +8,7 @@ Still no sound support and no color (GBC) support (yet).
 
 ## Keyboard layoyt
 
-Buttons are mapped as below, direcional are mapped using left, up, right and down keys.
+Action buttons are mapped as below, direction buttons are mapped using left, up, right and down keys, respectively.
 
 | Button A | Button B | Start | Select |
 |----------|----------|-------|--------|
