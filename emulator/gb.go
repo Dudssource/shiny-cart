@@ -19,7 +19,7 @@ type GameBoy struct {
 	video  *Video
 }
 
-func NewGameBoy(debug, step, silent, profiling bool, breakPoints string) *GameBoy {
+func NewGameBoy(debug, step, silent, profiling bool, breakPoints string, palette int) *GameBoy {
 	if step {
 		debug = true
 	}
@@ -38,8 +38,9 @@ func NewGameBoy(debug, step, silent, profiling bool, breakPoints string) *GameBo
 		timer:  NewTimer(c),
 		joypad: NewJoypad(c.memory),
 		video: &Video{
-			mem:  c.memory,
-			mode: 2,
+			mem:     c.memory,
+			mode:    2,
+			palette: palette,
 		},
 	}
 }

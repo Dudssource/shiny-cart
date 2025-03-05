@@ -41,6 +41,37 @@ const (
 	LYC_REGISTER  = 0xFF45
 )
 
+var palettes = map[int]map[Pixel]color.RGBA{
+	// default b/w
+	0: {
+		0: rl.RayWhite,
+		1: rl.LightGray,
+		2: rl.DarkGray,
+		3: rl.Black,
+	},
+	// https://www.deviantart.com/thewolfbunny64/art/Game-Boy-Palette-Lime-Midori-810574708
+	1: {
+		0: rl.NewColor(224, 235, 175, 255),
+		1: rl.NewColor(170, 207, 83, 255),
+		2: rl.NewColor(123, 141, 66, 255),
+		3: rl.NewColor(71, 89, 80, 255),
+	},
+	// https://www.deviantart.com/thewolfbunny64/art/Game-Boy-Palette-Pokemon-Pinball-Ver-882658817
+	2: {
+		0: rl.NewColor(232, 248, 184, 255),
+		1: rl.NewColor(160, 176, 80, 255),
+		2: rl.NewColor(120, 96, 48, 255),
+		3: rl.NewColor(24, 24, 32, 255),
+	},
+	// https://www.deviantart.com/thewolfbunny64/art/Game-Boy-Palette-Green-Awakening-883049033
+	3: {
+		0: rl.NewColor(241, 255, 221, 255),
+		1: rl.NewColor(152, 219, 117, 255),
+		2: rl.NewColor(54, 112, 88, 255),
+		3: rl.NewColor(0, 11, 22, 255),
+	},
+}
+
 type Video struct {
 	w              int32
 	h              int32
@@ -51,6 +82,8 @@ type Video struct {
 	mem            *Memory
 	scanline       int
 	scancolumn     int
+	windowScanline int
+
 	mode           uint8
 	buffer         []Sprite
 	tick           int
@@ -58,6 +91,7 @@ type Video struct {
 	nextMode       uint8
 	disabled       bool
 	lastComparison bool
+	palette        int
 
 	currentOamAddr Word
 
@@ -83,7 +117,6 @@ func (v *Video) init(width, height int32) {
 	v.w = width
 	v.h = height
 	v.scaleFactor = v.w / v.internalWidth
-
 	v.t = time.Now()
 
 	rl.InitWindow(v.w, v.h, "GameBoy-DMG Emulator")
@@ -165,16 +198,43 @@ func (v *Video) fetchWindow() (Pixel, bool) {
 	wy := int(v.mem.Read(0xFF4A))
 	wx := int(v.mem.Read(0xFF4B) - 7)
 
-	// bg disabled or outside window boundaries
-	if (lcdc&0x1 > 0 && lcdc&0x20 > 0) && (v.scanline >= wy && v.scancolumn >= wx) {
-		tileY := ((wy + y) / 8) % 32
-		tileX := (wx + (x / 8)) % 32
+	wsc := v.windowScanline
 
-		tileAddress := Word(address + (tileY * 32) + tileX)
-		tileNumber := v.mem.Read(tileAddress)
-		tile := v.fetchTile(tileNumber, mode, 8)
+	// bg disabled or outside window boundaries
+	if (lcdc&0x1 > 0 && lcdc&0x20 > 0) && (y >= wy && x >= wx) {
+
+		offset := ((((x + wx) / 8) & 0x1F) + (32 * (int((wsc + wx) / 8)))) & 0x3FF
+
+		tileNumber := v.mem.Read(Word(address + offset))
+
+		var tileDataAddress Word
+
+		if mode == 1 {
+			tileDataAddress = (Word(int(tileNumber) * 16)) + 0x8000
+		} else {
+			// check sign bit
+			signed := ((tileNumber & 0x80) >> 7) > 0
+			if signed {
+				tileDataAddress = Word(0x9000 - (int(^tileNumber+1) * 16))
+			} else {
+				tileDataAddress = Word(0x9000 + (int(tileNumber) * 16))
+			}
+		}
+
+		tileDataAddress += Word(2 * (int((v.windowScanline) % 8)))
+
+		l1 := v.mem.Read(tileDataAddress)
+		l2 := v.mem.Read(tileDataAddress + 1)
+
+		var tile [8]Pixel
+
+		for b := 0; b < 8; b++ {
+			pixels := ((l2&(0x1<<b))>>b)<<1 | (l1&(0x1<<b))>>b
+			tile[7-b] = Pixel(pixels)
+		}
+
+		pixel := tile[x%8]
 		palette := v.mem.Read(0xFF47)
-		pixel := tile[y%8][x%8]
 		color := palette & ((0x3) << (pixel * 2)) >> (pixel * 2)
 		return Pixel(color), true
 	}
@@ -182,6 +242,8 @@ func (v *Video) fetchWindow() (Pixel, bool) {
 	return 0, false
 }
 
+// fetchBackground
+// https://github.com/Hacktix/GBEDG/blob/master/ppu/index.md#background-pixel-fetching
 func (v *Video) fetchBackground() Pixel {
 
 	lcdc := v.mem.Read(LCDC_REGISTER)
@@ -192,7 +254,6 @@ func (v *Video) fetchBackground() Pixel {
 	}
 
 	tileMap := v.mem.Read(LCDC_REGISTER) & 0x8 >> 3
-	mode := v.mem.Read(LCDC_REGISTER) & 0x10 >> 4
 	address := 0x9800
 	if tileMap == 1 {
 		address = 0x9C00
@@ -201,25 +262,42 @@ func (v *Video) fetchBackground() Pixel {
 	y := v.scanline
 	x := v.scancolumn
 
-	scy := int(v.mem.Read(0xff42))
-	scx := int(v.mem.Read(0xff43))
+	scy := int(v.mem.Read(0xFF42))
+	scx := int(v.mem.Read(0xFF43))
 
-	tileY := ((y / 8) + scy) % 32
-	tileX := ((x / 8) + scx) % 32
+	offset := ((((x + scx) / 8) & 0x1F) + (32 * (((y + scy) & 0xFF) / 8))) & 0x3FF
 
-	// tileY := (scy + y) & 0xFF
-	// tileX := ((scx / 8) + x) & 0x1F
+	mode := v.mem.Read(LCDC_REGISTER) & 0x10 >> 4
+	tileNumber := v.mem.Read(Word(address + offset))
 
-	offX := x
-	offY := y
+	var tileDataAddress Word
 
-	// log.Printf("OFFX %d (%d) OFFY %d (%d)\n", offX, scx, offY, scy)
+	if mode == 1 {
+		tileDataAddress = (Word(int(tileNumber) * 16)) + 0x8000
+	} else {
+		// check sign bit
+		signed := ((tileNumber & 0x80) >> 7) > 0
+		if signed {
+			tileDataAddress = Word(0x9000 - (int(^tileNumber+1) * 16))
+		} else {
+			tileDataAddress = Word(0x9000 + (int(tileNumber) * 16))
+		}
+	}
 
-	tileAddress := Word(address + (tileY * 32) + tileX)
-	tileNumber := v.mem.Read(tileAddress)
-	tile := v.fetchTile(tileNumber, mode, 8)
+	tileDataAddress += Word(2 * ((y + scy) % 8))
+
+	l1 := v.mem.Read(tileDataAddress)
+	l2 := v.mem.Read(tileDataAddress + 1)
+
+	var tile [8]Pixel
+
+	for b := 0; b < 8; b++ {
+		pixels := ((l2&(0x1<<b))>>b)<<1 | (l1&(0x1<<b))>>b
+		tile[7-b] = Pixel(pixels)
+	}
+
+	pixel := tile[(scx+x)%8]
 	palette := v.mem.Read(0xFF47)
-	pixel := tile[offY%8][offX%8]
 	color := palette & ((0x3) << (pixel * 2)) >> (pixel * 2)
 	return Pixel(color)
 }
@@ -262,28 +340,7 @@ func (v *Video) draw() {
 	rl.ClearBackground(rl.RayWhite)
 	defer rl.EndDrawing()
 
-	// https://www.deviantart.com/thewolfbunny64/art/Game-Boy-Palette-Lime-Midori-810574708
-	// colors := map[Pixel]color.RGBA{
-	// 	0: rl.NewColor(224, 235, 175, 255),
-	// 	1: rl.NewColor(170, 207, 83, 255),
-	// 	2: rl.NewColor(123, 141, 66, 255),
-	// 	3: rl.NewColor(71, 89, 80, 255),
-	// }
-
-	// https://www.deviantart.com/thewolfbunny64/art/Game-Boy-Palette-Pokemon-Pinball-Ver-882658817
-	colors := map[Pixel]color.RGBA{
-		0: rl.NewColor(232, 248, 184, 255),
-		1: rl.NewColor(160, 176, 80, 255),
-		2: rl.NewColor(120, 96, 48, 255),
-		3: rl.NewColor(24, 24, 32, 255),
-	}
-
-	// colors := map[Pixel]color.RGBA{
-	// 	0: rl.RayWhite,
-	// 	1: rl.LightGray,
-	// 	2: rl.DarkGray,
-	// 	3: rl.Black,
-	// }
+	colors := palettes[v.palette]
 
 	// Draw
 	for y := 0; y < 144; y++ {
@@ -306,7 +363,7 @@ func (v *Video) draw() {
 	}
 }
 
-func (v *Video) checkInterruption(c *Cpu, resetCondition bool) {
+func (v *Video) checkInterruption(resetCondition bool) {
 	lcds := v.mem.Read(LCD_REGISTER)
 	lyc := v.mem.Read(LYC_REGISTER)
 
@@ -328,8 +385,16 @@ func (v *Video) checkInterruption(c *Cpu, resetCondition bool) {
 func (v *Video) advanceLy(c *Cpu) {
 	v.scanline++
 	v.mem.Write(LY_REGISTER, uint8(v.scanline))
+
+	lcdc := v.mem.Read(LCDC_REGISTER)
+	// bg disabled or outside window boundaries
+	wy := int(v.mem.Read(0xFF4A))
+	if (lcdc&0x1 > 0 && lcdc&0x20 > 0) && v.scanline > wy {
+		v.windowScanline++
+	}
+
 	// check for LY=0 as well
-	v.checkInterruption(c, true)
+	v.checkInterruption(true)
 	v.lastComparison = false
 	if c.step {
 		fmt.Printf("LY=%d\n", v.scanline)
@@ -343,6 +408,7 @@ func (v *Video) scan(c *Cpu) {
 		lcds := v.mem.Read(LCD_REGISTER)
 		log.Printf("REENABLING PPU %.8b PC=0x%X\n", lcds, c.pc)
 		v.scanline = 0
+		v.windowScanline = 0
 		v.scancolumn = 0
 		v.mode = 2
 		v.tick = 0
@@ -352,7 +418,7 @@ func (v *Video) scan(c *Cpu) {
 		v.buffer = make([]Sprite, 0)
 		v.currentOamAddr = 0
 		v.disabled = false
-		v.checkInterruption(c, true)
+		v.checkInterruption(true)
 		return
 	}
 
@@ -365,7 +431,7 @@ func (v *Video) scan(c *Cpu) {
 		return
 	}
 
-	v.checkInterruption(c, false)
+	v.checkInterruption(false)
 
 	v.total++
 	v.total2++
@@ -399,6 +465,7 @@ func (v *Video) scan(c *Cpu) {
 
 	// process v-blank
 	if v.mode == 1 {
+		v.windowScanline = 0
 		if v.scanline == 153 {
 			v.total2 = 0
 			v.scanline = 0
@@ -496,6 +563,12 @@ func (v *Video) scan(c *Cpu) {
 						}
 						palette := v.mem.Read(addr)
 						color = Pixel(palette & ((0x3) << (pixel * 2)) >> (pixel * 2))
+					}
+
+					// obj is disabled
+					lcdc := v.mem.Read(LCDC_REGISTER)
+					if lcdc&0x2 == 0 {
+						continue
 					}
 
 					if color == 100 || (bgPx > 0 && o.flags&0x80 > 0) {
