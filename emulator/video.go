@@ -358,7 +358,6 @@ func (v *Video) draw() {
 			}
 
 			rl.DrawRectangle(posX, posY, scaleFactory, scaleFactory, color)
-			//rl.DrawPixel(int32(x), int32(y), colors[pixel])
 		}
 	}
 }
@@ -382,7 +381,7 @@ func (v *Video) checkInterruption(resetCondition bool) {
 	}
 }
 
-func (v *Video) advanceLy(c *Cpu) {
+func (v *Video) advanceLy(_ *Cpu) {
 	v.scanline++
 	v.mem.Write(LY_REGISTER, uint8(v.scanline))
 
@@ -396,9 +395,6 @@ func (v *Video) advanceLy(c *Cpu) {
 	// check for LY=0 as well
 	v.checkInterruption(true)
 	v.lastComparison = false
-	if c.step {
-		fmt.Printf("LY=%d\n", v.scanline)
-	}
 }
 
 func (v *Video) scan(c *Cpu) {
@@ -436,8 +432,8 @@ func (v *Video) scan(c *Cpu) {
 	v.total++
 	v.total2++
 
-	if c.step {
-		fmt.Printf("LCDC=%.8b STAT=%.8b, LY=%d, LYC=%d\n", v.mem.Read(LCDC_REGISTER), v.mem.Read(LCD_REGISTER), v.scanline, v.mem.Read(LYC_REGISTER))
+	if c.debug {
+		log.Printf("LCDC=%.8b STAT=%.8b, LY=%d, LYC=%d\n", v.mem.Read(LCDC_REGISTER), v.mem.Read(LCD_REGISTER), v.scanline, v.mem.Read(LYC_REGISTER))
 	}
 
 	// used to delay PPU by n ticks
@@ -531,7 +527,7 @@ func (v *Video) scan(c *Cpu) {
 					if o.flags&0x40 > 0 {
 						cmp := sprite
 						for fy := range v.height() {
-							sprite[7-fy] = cmp[fy]
+							sprite[(v.height()-1)-fy] = cmp[fy]
 						}
 					}
 

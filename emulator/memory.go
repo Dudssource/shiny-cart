@@ -116,10 +116,6 @@ func (m *Memory) Write(address Word, value uint8) {
 		return
 	}
 
-	if address == INTERRUPT_ENABLE {
-		log.Printf("INTERRUPT ENABLE %.8b\n", value)
-	}
-
 	if address == PORT_JOYPAD {
 		// write JP
 		m.mem[address] = (value & 0x30) | (m.mem[address] & 0xCF)
