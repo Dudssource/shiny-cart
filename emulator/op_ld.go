@@ -262,7 +262,12 @@ func op_ld_imm16_a(c *Cpu, _ uint8) {
 	c.requiredCycles = 4
 	nn_lsb := c.fetch()
 	nn_msb := c.fetch()
-	c.memory.Write(NewWord(nn_msb, nn_lsb), c.reg.r8(reg_a))
+	dst := NewWord(nn_msb, nn_lsb)
+	src := c.reg.r8(reg_a)
+	if c.debug {
+		log.Printf("LD N16, A (%d, %d, %d)\n", nn_lsb, nn_msb, src)
+	}
+	c.memory.Write(dst, src)
 }
 
 // https://rgbds.gbdev.io/docs/v0.7.0/gbz80.7#LD_HL,SP+e8

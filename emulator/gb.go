@@ -87,7 +87,8 @@ func (g *GameBoy) Loop(interval time.Duration) error {
 			stop <- 0x0
 		}()
 
-		totalCycles := 0
+		tCycles := 0
+		mCycles := 0
 
 		start := time.Now()
 		cyclesPerSecond := 0
@@ -99,50 +100,62 @@ func (g *GameBoy) Loop(interval time.Duration) error {
 				return
 			case <-fps:
 
-				for range 17476 {
+				// 4.194304 MHz / 60 FPS
+				for range 69905 {
 
-					// broadcast machine cycle
-					g.broadcast(totalCycles)
+					if tCycles%4 == 0 {
 
-					// 4Mihz (t-cycles) = 1 Mihz (m-cycles) == 1ms
-					if totalCycles%1048 == 0 {
-						ticks++
-						// used for tshoot and profiling
-						if ticks == 1000 {
-							if g.c.profiling {
-								log.Println("Tick RTC after 1s")
+						// broadcast machine cycle
+						g.broadcast(mCycles)
+
+						// 4Mihz (t-cycles) = 1 Mihz (m-cycles) == 1ms
+						if mCycles%1048 == 0 {
+							ticks++
+							// used for tshoot and profiling
+							if ticks == 1000 {
+								if g.c.profiling {
+									log.Println("Tick RTC after 1s")
+								}
+								ticks = 0
 							}
-							ticks = 0
+
+							if g.c.memory.mbc.initialized() {
+								// RTC tick (if supported by cartridge)
+								g.c.memory.mbc.controller.Tick()
+							}
 						}
 
-						if g.c.memory.mbc.initialized() {
-							// RTC tick (if supported by cartridge)
-							g.c.memory.mbc.controller.Tick()
+						if g.c.stopped {
+							return
+						}
+
+						// overflow internal m-cycle counter, reset
+						if mCycles == math.MaxInt32 {
+							mCycles = 0
+						} else {
+							mCycles++
+						}
+
+						if time.Since(start).Seconds() >= 1 {
+							if g.c.profiling {
+								log.Printf("M-cycles per second %d\n", cyclesPerSecond)
+							}
+							cyclesPerSecond = 0
+							start = time.Now()
+						}
+						cyclesPerSecond++
+
+						if rl.IsKeyPressed(rl.KeyP) {
+							g.c.step = true
 						}
 					}
 
-					if g.c.stopped {
-						return
-					}
+					g.timer.sync2(tCycles)
 
-					// overflow internal m-cycle counter, reset
-					if totalCycles+1 > math.MaxInt32 {
-						totalCycles = 0
+					if tCycles == math.MaxInt32 {
+						tCycles = 0
 					} else {
-						totalCycles++
-					}
-
-					if time.Since(start).Seconds() >= 1 {
-						if g.c.profiling {
-							log.Printf("M-cycles per second %d\n", cyclesPerSecond)
-						}
-						cyclesPerSecond = 0
-						start = time.Now()
-					}
-					cyclesPerSecond++
-
-					if rl.IsKeyPressed(rl.KeyP) {
-						g.c.step = true
+						tCycles++
 					}
 				}
 			}
@@ -200,6 +213,6 @@ func (g *GameBoy) init() error {
 func (g *GameBoy) broadcast(cycle int) {
 	g.joypad.sync(cycle)
 	g.c.sync(cycle)
-	g.timer.sync(cycle)
+	//g.timer.sync(cycle)
 	g.video.scan(g.c)
 }

@@ -1,7 +1,5 @@
 package emulator
 
-import "log"
-
 // https://gbdev.io/pandocs/Memory_Map.html#memory-map
 const (
 	ROM_BANK_00_START = Word(0x0000)
@@ -23,11 +21,12 @@ const (
 type memoryArea []uint8
 
 type Memory struct {
-	mem    memoryArea // 8-bit address bus, 64kb memory
-	rom    memoryArea // ROM area
-	mbc    *Mbc
-	joypad uint8
-	dma    bool
+	mem        memoryArea // 8-bit address bus, 64kb memory
+	rom        memoryArea // ROM area
+	mbc        *Mbc
+	joypad     uint8
+	dma        bool
+	resetTimer bool
 }
 
 func NewMemory() *Memory {
@@ -110,9 +109,13 @@ func (m *Memory) Read(address Word) uint8 {
 func (m *Memory) Write(address Word, value uint8) {
 
 	if address == PORT_DIV {
-		log.Printf("RESET TIMER %d\n", value)
 		// reset timer
 		m.mem[address] = 0x0
+		// reset tima
+		m.mem[PORT_TIMA] = 0x0
+
+		// timer v2
+		m.resetTimer = true
 		return
 	}
 

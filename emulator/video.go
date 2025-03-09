@@ -103,14 +103,6 @@ type Video struct {
 	total2 int
 }
 
-func (v *Video) Draw(bitmap []byte, x, y int32, rowWiseBitmap bool) {
-
-	//rl.BeginDrawing()
-	//rl.ClearBackground(rl.RayWhite)
-
-	//defer rl.EndDrawing()
-}
-
 func (v *Video) init(width, height int32) {
 	v.internalWidth = 64
 	v.internalHeight = 32
@@ -120,7 +112,7 @@ func (v *Video) init(width, height int32) {
 	v.t = time.Now()
 
 	rl.InitWindow(v.w, v.h, "GameBoy-DMG Emulator")
-	rl.SetTargetFPS(60)
+	rl.SetTargetFPS(59)
 }
 
 func (v *Video) setMode(mode uint8) {
@@ -183,10 +175,16 @@ func (v *Video) shouldAddToBuffer(sprite Sprite) bool {
 	return len(v.buffer) < 10 && v.scanline >= int(sprite.yPos) && int(sprite.yPos)+int(v.height()) > v.scanline
 }
 
-func (v *Video) fetchWindow() (Pixel, bool) {
-	tileMap := v.mem.Read(LCDC_REGISTER) & 0x40 >> 6
+func (v *Video) fetchWindow() (Pixel, Pixel, bool) {
+
 	lcdc := v.mem.Read(LCDC_REGISTER)
-	mode := lcdc & 0x10 >> 4
+
+	// bg disabled or window disabled
+	if lcdc&0x1 == 0 || lcdc&0x20 == 0 {
+		return 0, 0, false
+	}
+
+	tileMap := (v.mem.Read(LCDC_REGISTER) & 0x40) >> 6
 	address := 0x9800
 	if tileMap == 1 {
 		address = 0x9C00
@@ -201,7 +199,9 @@ func (v *Video) fetchWindow() (Pixel, bool) {
 	wsc := v.windowScanline
 
 	// bg disabled or outside window boundaries
-	if (lcdc&0x1 > 0 && lcdc&0x20 > 0) && (y >= wy && x >= wx) {
+	if y >= wy && x >= wx {
+
+		mode := (lcdc & 0x10) >> 4
 
 		offset := ((((x + wx) / 8) & 0x1F) + (32 * (int((wsc + wx) / 8)))) & 0x3FF
 
@@ -213,11 +213,14 @@ func (v *Video) fetchWindow() (Pixel, bool) {
 			tileDataAddress = (Word(int(tileNumber) * 16)) + 0x8000
 		} else {
 			// check sign bit
-			signed := ((tileNumber & 0x80) >> 7) > 0
+			signed := (tileNumber & 0x80) > 0
 			if signed {
-				tileDataAddress = Word(0x9000 - (int(^tileNumber+1) * 16))
+				tileDataAddress = Word(0x9000 - ((int(^tileNumber + 1)) * 16))
 			} else {
+
 				tileDataAddress = Word(0x9000 + (int(tileNumber) * 16))
+				// log.Printf("SIGNED WINDOW %X %d %d %X\n", tileDataAddress, tileNumber, tileMap, address+offset)
+				//log.Printf("SIGNED WINDOW y=%d x=%d addr=%X\n", (wsc+y/32)%32, (wx+x)%32, address+offset)
 			}
 		}
 
@@ -233,27 +236,27 @@ func (v *Video) fetchWindow() (Pixel, bool) {
 			tile[7-b] = Pixel(pixels)
 		}
 
-		pixel := tile[x%8]
+		pixel := tile[(wx+x)%8]
 		palette := v.mem.Read(0xFF47)
 		color := palette & ((0x3) << (pixel * 2)) >> (pixel * 2)
-		return Pixel(color), true
+		return Pixel(color), pixel, true
 	}
 
-	return 0, false
+	return 0, 0, false
 }
 
 // fetchBackground
 // https://github.com/Hacktix/GBEDG/blob/master/ppu/index.md#background-pixel-fetching
-func (v *Video) fetchBackground() Pixel {
+func (v *Video) fetchBackground() (Pixel, Pixel) {
 
 	lcdc := v.mem.Read(LCDC_REGISTER)
 
 	// bg disabled
 	if lcdc&0x1 == 0 {
-		return 0
+		return 0, 0
 	}
 
-	tileMap := v.mem.Read(LCDC_REGISTER) & 0x8 >> 3
+	tileMap := lcdc & 0x8 >> 3
 	address := 0x9800
 	if tileMap == 1 {
 		address = 0x9C00
@@ -267,7 +270,7 @@ func (v *Video) fetchBackground() Pixel {
 
 	offset := ((((x + scx) / 8) & 0x1F) + (32 * (((y + scy) & 0xFF) / 8))) & 0x3FF
 
-	mode := v.mem.Read(LCDC_REGISTER) & 0x10 >> 4
+	mode := lcdc & 0x10 >> 4
 	tileNumber := v.mem.Read(Word(address + offset))
 
 	var tileDataAddress Word
@@ -278,7 +281,7 @@ func (v *Video) fetchBackground() Pixel {
 		// check sign bit
 		signed := ((tileNumber & 0x80) >> 7) > 0
 		if signed {
-			tileDataAddress = Word(0x9000 - (int(^tileNumber+1) * 16))
+			tileDataAddress = Word(0x9000 - ((int(^tileNumber + 1)) * 16))
 		} else {
 			tileDataAddress = Word(0x9000 + (int(tileNumber) * 16))
 		}
@@ -299,7 +302,7 @@ func (v *Video) fetchBackground() Pixel {
 	pixel := tile[(scx+x)%8]
 	palette := v.mem.Read(0xFF47)
 	color := palette & ((0x3) << (pixel * 2)) >> (pixel * 2)
-	return Pixel(color)
+	return Pixel(color), pixel
 }
 
 func (v *Video) fetchTile(tileNumber, mode, size uint8) Tile {
@@ -403,14 +406,11 @@ func (v *Video) scan(c *Cpu) {
 	if v.disabled && v.mem.Read(LCDC_REGISTER)&0x80 > 0 {
 		lcds := v.mem.Read(LCD_REGISTER)
 		log.Printf("REENABLING PPU %.8b PC=0x%X\n", lcds, c.pc)
-		v.scanline = 0
-		v.windowScanline = 0
-		v.scancolumn = 0
-		v.mode = 2
 		v.tick = 0
 		v.total = 0
 		v.total2 = 0
 		v.delay = 0
+		v.setMode(1)
 		v.buffer = make([]Sprite, 0)
 		v.currentOamAddr = 0
 		v.disabled = false
@@ -422,6 +422,11 @@ func (v *Video) scan(c *Cpu) {
 	if v.mem.Read(LCDC_REGISTER)&0x80 == 0x0 {
 		if !v.disabled {
 			log.Printf("DISABLING PPU\n")
+			v.scanline = 0
+			v.windowScanline = 0
+			v.scancolumn = 0
+			v.setMode(0)
+			v.mem.Write(LY_REGISTER, uint8(v.scanline))
 			v.disabled = true
 		}
 		return
@@ -465,15 +470,15 @@ func (v *Video) scan(c *Cpu) {
 		if v.scanline == 153 {
 			v.total2 = 0
 			v.scanline = 0
+			v.mem.Write(LY_REGISTER, uint8(v.scanline))
 			v.scancolumn = 0
-			v.setMode(2)
+			v.delay = 114
+			v.nextMode = 2
 		} else {
 			// advance LY
 			v.advanceLy(c)
-			if v.scanline > 144 {
-				v.delay = 114
-				v.nextMode = 1
-			}
+			v.delay = 114
+			v.nextMode = 1
 		}
 	}
 
@@ -492,13 +497,13 @@ func (v *Video) scan(c *Cpu) {
 		}
 
 		// 20 m-cycles
-		if v.tick == 20 {
+		if v.tick == 21 {
 
 			// reset oam address counter
 			v.currentOamAddr = 0
 
 			sort.SliceStable(v.buffer, func(i, j int) bool {
-				return v.buffer[i].xPos < v.buffer[j].xPos
+				return v.buffer[i].xPos > v.buffer[j].xPos
 			})
 
 			// drawing
@@ -513,13 +518,25 @@ func (v *Video) scan(c *Cpu) {
 
 		// 4 dots per m-cycle
 		for range 4 {
-			processed := false
-			bgPx := v.fetchBackground()
-			bgWd, hasWindow := v.fetchWindow()
+			bgPx, obgPx := v.fetchBackground()
+			bgWd, obgWd, hasWindow := v.fetchWindow()
+
+			// default is to display BG or Window, (can be overriden by sprites below)
+			if hasWindow {
+				v.videoMemory[v.scanline][v.scancolumn] = bgWd
+			} else {
+				v.videoMemory[v.scanline][v.scancolumn] = bgPx
+			}
 
 			for _, o := range v.buffer {
 
 				if v.scancolumn >= int(o.xPos) && int(o.xPos+8) > v.scancolumn {
+
+					// obj is disabled
+					lcdc := v.mem.Read(LCDC_REGISTER)
+					if lcdc&0x2 == 0 {
+						continue
+					}
 
 					sprite := v.fetchTile(o.tile, 1, v.height())
 
@@ -543,51 +560,37 @@ func (v *Video) scan(c *Cpu) {
 
 					py := (v.scanline - int(o.yPos)) % int(v.height())
 					px := (v.scancolumn - int(o.xPos)) % 8
-					pixel := sprite[py][px]
 
-					color := pixel
+					objPx := sprite[py][px]
 
-					// custom alpha indicator
-					if pixel == 0x0 {
-						color = 100
-					} else {
+					if objPx != 0x0 {
 						// OBP0
 						addr := Word(0xFF48)
+
 						// OBP1
 						if o.flags&0x10 > 0 {
 							addr = 0xFF49
 						}
+
+						pixel := sprite[py][px]
+
+						// BG-OVER-OBJ priority
+						bgOverObj := o.flags&0x80 > 0
+
+						// obj color palette
 						palette := v.mem.Read(addr)
-						color = Pixel(palette & ((0x3) << (pixel * 2)) >> (pixel * 2))
-					}
 
-					// obj is disabled
-					lcdc := v.mem.Read(LCDC_REGISTER)
-					if lcdc&0x2 == 0 {
-						continue
-					}
+						// apply palette
+						color := Pixel(palette & ((0x3) << (pixel * 2)) >> (pixel * 2))
 
-					if color == 100 || (bgPx > 0 && o.flags&0x80 > 0) {
-						if hasWindow {
-							v.videoMemory[v.scanline][v.scancolumn] = bgWd
-						} else {
-							v.videoMemory[v.scanline][v.scancolumn] = bgPx
+						// bg over obj AND bg original color > 0
+						if !bgOverObj || ((!hasWindow && obgPx == 0) || (hasWindow && obgWd == 0)) {
+							v.videoMemory[v.scanline][v.scancolumn] = Pixel(color)
 						}
-					} else {
-						v.videoMemory[v.scanline][v.scancolumn] = Pixel(color)
+
+						// stop process
+						break
 					}
-
-					// found pixel during merge
-					processed = true
-					break
-				}
-			}
-
-			if !processed {
-				if hasWindow {
-					v.videoMemory[v.scanline][v.scancolumn] = bgWd
-				} else {
-					v.videoMemory[v.scanline][v.scancolumn] = bgPx
 				}
 			}
 

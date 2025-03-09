@@ -155,7 +155,7 @@ func (m *Mbc) detectType(mem memoryArea) error {
 		return fmt.Errorf("not supported cartridge type %X", cartridgeType)
 	}
 
-	log.Printf("Detected cartdrige type %s\n", controller.Name())
+	log.Printf("Detected cartdrige type %s (size=%d)\n", controller.Name(), romSize(mem))
 
 	m.controller = controller
 	m.mem = mem

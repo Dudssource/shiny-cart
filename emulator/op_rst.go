@@ -21,5 +21,7 @@ func op_rst(c *Cpu, opcode uint8) {
 	c.memory.Write(c.sp, pc.High())
 	c.sp--
 	c.memory.Write(c.sp, pc.Low())
+
+	c.previousPC = c.pc
 	c.pc = NewWord(0x00, vec[tgt])
 }

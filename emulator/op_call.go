@@ -12,6 +12,7 @@ func op_call_imm16(c *Cpu, _ uint8) {
 	lsb := c.fetch()
 	msb := c.fetch()
 	pc := c.pc
+	c.previousPC = c.pc
 	c.pc = NewWord(msb, lsb)
 
 	if c.debug {
@@ -39,6 +40,7 @@ func op_call_cond(c *Cpu, opcode uint8) {
 		c.memory.Write(c.sp, c.pc.High())
 		c.sp--
 		c.memory.Write(c.sp, c.pc.Low())
+		c.previousPC = c.pc
 		c.pc = NewWord(w, z)
 	}
 

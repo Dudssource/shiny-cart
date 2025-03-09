@@ -11,6 +11,7 @@ func op_ret(c *Cpu, _ uint8) {
 	c.sp++
 	msb := c.memory.Read(c.sp)
 	c.sp++
+	c.previousPC = c.pc
 	c.pc = NewWord(msb, lsb)
 }
 
@@ -44,6 +45,7 @@ func op_ret_cond(c *Cpu, opcode uint8) {
 		msb := c.memory.Read(c.sp)
 		c.sp++
 
+		c.previousPC = c.pc
 		c.pc = NewWord(msb, lsb)
 	}
 }

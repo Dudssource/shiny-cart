@@ -53,57 +53,49 @@ func (j *Joypad) sync(_ int) {
 		j.memory.joypad |= 0x1
 	}
 
-	for {
-		var pressed uint8
-		key := rl.GetKeyPressed()
-		if key == 0 {
-			// no keys pressed
-			//j.memory.joypad |= 0xFF
-			return
-		}
+	var pressed uint8
 
-		switch key {
-		case rl.KeyQ:
-			// start
-			j.memory.joypad &= 0x7F
-			pressed |= 0x1 // button
-		case rl.KeyW:
-			// select
-			j.memory.joypad &= 0xBF
-			pressed |= 0x1 // button
-		case rl.KeyA:
-			// A
-			j.memory.joypad &= 0xEF
-			pressed |= 0x1 // button
-		case rl.KeyS:
-			// B
-			j.memory.joypad &= 0xDF
-			pressed |= 0x1 // button
-		case rl.KeyDown:
-			// down
-			j.memory.joypad &= 0xF7
-			pressed |= 0x2 // directional
-		case rl.KeyUp:
-			// up
-			j.memory.joypad &= 0xFB
-			pressed |= 0x2 // directional
-		case rl.KeyLeft:
-			// left
-			j.memory.joypad &= 0xFD
-			pressed |= 0x2 // directional
-		case rl.KeyRight:
-			// right
-			j.memory.joypad &= 0xFE
-			pressed |= 0x2 // directional
-		}
+	switch rl.GetKeyPressed() {
+	case rl.KeyQ:
+		// start
+		j.memory.joypad &= 0x7F
+		pressed |= 0x1 // button
+	case rl.KeyW:
+		// select
+		j.memory.joypad &= 0xBF
+		pressed |= 0x1 // button
+	case rl.KeyA:
+		// A
+		j.memory.joypad &= 0xEF
+		pressed |= 0x1 // button
+	case rl.KeyS:
+		// B
+		j.memory.joypad &= 0xDF
+		pressed |= 0x1 // button
+	case rl.KeyDown:
+		// down
+		j.memory.joypad &= 0xF7
+		pressed |= 0x2 // directional
+	case rl.KeyUp:
+		// up
+		j.memory.joypad &= 0xFB
+		pressed |= 0x2 // directional
+	case rl.KeyLeft:
+		// left
+		j.memory.joypad &= 0xFD
+		pressed |= 0x2 // directional
+	case rl.KeyRight:
+		// right
+		j.memory.joypad &= 0xFE
+		pressed |= 0x2 // directional
+	}
 
-		// button pressed OR directional
-		if (jp&0x20 == 0x0 && (pressed&0x1) > 0) || (jp&0x10 == 0x0 && (pressed&0x2) > 0) {
-			// request interrupt
-			iflag := j.memory.Read(INTERRUPT_FLAG)
-			iflag |= 0x10
-			j.memory.Write(INTERRUPT_FLAG, iflag)
-		}
+	// button pressed OR directional
+	if (jp&0x20 == 0x0 && (pressed&0x1) > 0) || (jp&0x10 == 0x0 && (pressed&0x2) > 0) {
+		// request interrupt
+		iflag := j.memory.Read(INTERRUPT_FLAG)
+		iflag |= 0x10
+		j.memory.Write(INTERRUPT_FLAG, iflag)
 	}
 }
 

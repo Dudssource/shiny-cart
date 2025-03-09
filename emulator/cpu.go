@@ -49,8 +49,9 @@ type Opcodes struct {
 type Cpu struct {
 	memory *Memory // 8-bit address bus
 
-	pc Word // program counter
-	sp Word // stack pointer
+	previousPC Word // debugging
+	pc         Word // program counter
+	sp         Word // stack pointer
 
 	ime      uint8 // interrupt master enable
 	enableEI bool  // delay EI
@@ -83,6 +84,7 @@ type Cpu struct {
 func (c *Cpu) fetch() uint8 {
 	// read from memory
 	data := c.memory.Read(c.pc)
+	c.previousPC = c.pc
 	c.pc++
 	return data
 }
@@ -468,6 +470,7 @@ func (c *Cpu) interruptRequested() bool {
 		c.pushPCIntoStack()
 
 		// vBlank
+		c.previousPC = c.pc
 		c.pc = Word(0x40)
 
 		// unset
@@ -487,6 +490,7 @@ func (c *Cpu) interruptRequested() bool {
 		c.pushPCIntoStack()
 
 		// LCDC / STAT
+		c.previousPC = c.pc
 		c.pc = Word(0x48)
 
 		// unset
@@ -506,6 +510,7 @@ func (c *Cpu) interruptRequested() bool {
 		c.pushPCIntoStack()
 
 		// TIMER
+		c.previousPC = c.pc
 		c.pc = Word(0x50)
 
 		// unset
@@ -525,6 +530,7 @@ func (c *Cpu) interruptRequested() bool {
 		c.pushPCIntoStack()
 
 		// SERIAL
+		c.previousPC = c.pc
 		c.pc = Word(0x58)
 
 		// unset
@@ -542,6 +548,7 @@ func (c *Cpu) interruptRequested() bool {
 		c.pushPCIntoStack()
 
 		// JOYPAD
+		c.previousPC = c.pc
 		c.pc = Word(0x60)
 
 		// unset
@@ -607,8 +614,8 @@ func (c *Cpu) sync(cycle int) {
 
 	if !c.halted && c.scheduledOAMDma >= 0 && !c.memory.dma {
 		if c.scheduledOAMDma < 160 {
-			rSrcAddr := NewWord(uint8(c.oamDmaSource), 0x0) + Word(159-c.scheduledOAMDma)
-			rTgtAddr := Word(0xFE00 + 159 - Word(c.scheduledOAMDma))
+			rSrcAddr := NewWord(uint8(c.oamDmaSource), uint8(159-c.scheduledOAMDma))
+			rTgtAddr := NewWord(0xFE, uint8(159-c.scheduledOAMDma))
 			rVal := c.memory.Read(rSrcAddr)
 			if c.debug {
 				log.Printf("COPY OAM DMA 0x%X FROM 0x%X TO 0x%X (PC=0x%.8X, IDX=%d)\n", rVal, rSrcAddr, rTgtAddr, c.pc, c.scheduledOAMDma)
@@ -690,7 +697,7 @@ func (c *Cpu) sync(cycle int) {
 			sb.WriteString("STEP BEFORE\n")
 			sb.WriteString("*********************************\n")
 
-			sb.WriteString(fmt.Sprintf("\tOP (val=0x%X bit=%.8b name=%s) \n\tPC=0x%X\n\tSP=0x%X\n\tIME=%d\n", c.opcode, c.opcode, operation, c.pc-1, c.sp, c.ime))
+			sb.WriteString(fmt.Sprintf("\tOP (val=0x%X bit=%.8b name=%s) \n\tPC=0x%X\n\tSP=0x%X\n\tIME=%d\n\tPREV_PC=0x%X\n", c.opcode, c.opcode, operation, c.pc-1, c.sp, c.ime, c.previousPC))
 
 			sb.WriteString(fmt.Sprintf("\tREG_B=0x%X\n\tREG_C=0x%X\n\tREG_D=0x%X\n\tREG_E=0x%X\n\tREG_H=0x%X\n\tREG_L=0x%X\n\tREG_A=0x%X\n\tREG_F=0x%X\n", c.reg.r8(reg_b), c.reg.r8(reg_c), c.reg.r8(reg_d), c.reg.r8(reg_e), c.reg.r8(reg_h), c.reg.r8(reg_l), c.reg.r8(reg_a), c.reg.r8(reg_f)))
 
@@ -722,7 +729,7 @@ func (c *Cpu) sync(cycle int) {
 			sb.WriteString("STEP AFTER\n")
 			sb.WriteString("*********************************\n")
 
-			sb.WriteString(fmt.Sprintf("\tOP (val=0x%X bit=%.8b name=%s) \n\tPC=0x%X\n\tSP=0x%X\n\tIME=%d\n", c.opcode, c.opcode, operation, c.pc, c.sp, c.ime))
+			sb.WriteString(fmt.Sprintf("\tOP (val=0x%X bit=%.8b name=%s) \n\tPC=0x%X\n\tSP=0x%X\n\tIME=%d\n\tPREV_PC=0x%X\n", c.opcode, c.opcode, operation, c.pc, c.sp, c.ime, c.previousPC))
 
 			sb.WriteString(fmt.Sprintf("\tREG_B=0x%X\n\tREG_C=0x%X\n\tREG_D=0x%X\n\tREG_E=0x%X\n\tREG_H=0x%X\n\tREG_L=0x%X\n\tREG_A=0x%X\n\tREG_F=0x%X\n", c.reg.r8(reg_b), c.reg.r8(reg_c), c.reg.r8(reg_d), c.reg.r8(reg_e), c.reg.r8(reg_h), c.reg.r8(reg_l), c.reg.r8(reg_a), c.reg.r8(reg_f)))
 
@@ -768,7 +775,7 @@ func (c *Cpu) sync(cycle int) {
 
 	// handle OAM request
 	oam := int(c.memory.Read(PORT_OAM_DMA_CONTROL))
-	if !c.halted && c.memory.dma {
+	if !c.halted && c.memory.dma && c.scheduledOAMDma < 0 {
 		if c.debug {
 			log.Printf("SCHEDULED OAM DMA AT 0x%X (PC=0x%.8X)\n", oam, c.pc)
 		}
