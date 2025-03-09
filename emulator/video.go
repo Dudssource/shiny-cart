@@ -410,7 +410,7 @@ func (v *Video) scan(c *Cpu) {
 		v.total = 0
 		v.total2 = 0
 		v.delay = 0
-		v.setMode(1)
+		v.setMode(2)
 		v.buffer = make([]Sprite, 0)
 		v.currentOamAddr = 0
 		v.disabled = false
