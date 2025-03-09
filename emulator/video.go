@@ -336,7 +336,7 @@ func (v *Video) fetchTile(tileNumber, mode, size uint8) Tile {
 func (v *Video) draw() {
 
 	rl.BeginDrawing()
-	rl.ClearBackground(rl.RayWhite)
+	rl.ClearBackground(palettes[v.palette][0])
 	defer rl.EndDrawing()
 
 	colors := palettes[v.palette]
