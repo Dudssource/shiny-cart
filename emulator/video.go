@@ -79,10 +79,9 @@ type Video struct {
 	internalHeight int32
 	scaleFactor    int32
 
-	mem            *Memory
-	scanline       int
-	scancolumn     int
-	windowScanline int
+	mem        *Memory
+	scanline   int
+	scancolumn int
 
 	mode           uint8
 	buffer         []Sprite
@@ -196,14 +195,14 @@ func (v *Video) fetchWindow() (Pixel, Pixel, bool) {
 	wy := int(v.mem.Read(0xFF4A))
 	wx := int(v.mem.Read(0xFF4B) - 7)
 
-	wsc := v.windowScanline
-
 	// bg disabled or outside window boundaries
-	if y >= wy && x >= wx {
+	if wy <= y && x >= wx {
 
 		mode := (lcdc & 0x10) >> 4
+		yPos := (y - wy)
+		xPos := (x - wx)
 
-		offset := ((((x + wx) / 8) & 0x1F) + (32 * (int((wsc + wx) / 8)))) & 0x3FF
+		offset := ((xPos / 8) + (32 * (int(yPos / 8))))
 
 		tileNumber := v.mem.Read(Word(address + offset))
 
@@ -213,18 +212,15 @@ func (v *Video) fetchWindow() (Pixel, Pixel, bool) {
 			tileDataAddress = (Word(int(tileNumber) * 16)) + 0x8000
 		} else {
 			// check sign bit
-			signed := (tileNumber & 0x80) > 0
+			signed := ((tileNumber & 0x80) >> 7) > 0
 			if signed {
 				tileDataAddress = Word(0x9000 - ((int(^tileNumber + 1)) * 16))
 			} else {
-
 				tileDataAddress = Word(0x9000 + (int(tileNumber) * 16))
-				// log.Printf("SIGNED WINDOW %X %d %d %X\n", tileDataAddress, tileNumber, tileMap, address+offset)
-				//log.Printf("SIGNED WINDOW y=%d x=%d addr=%X\n", (wsc+y/32)%32, (wx+x)%32, address+offset)
 			}
 		}
 
-		tileDataAddress += Word(2 * (int((v.windowScanline) % 8)))
+		tileDataAddress += Word(2 * (yPos % 8))
 
 		l1 := v.mem.Read(tileDataAddress)
 		l2 := v.mem.Read(tileDataAddress + 1)
@@ -236,7 +232,7 @@ func (v *Video) fetchWindow() (Pixel, Pixel, bool) {
 			tile[7-b] = Pixel(pixels)
 		}
 
-		pixel := tile[(wx+x)%8]
+		pixel := tile[(xPos)%8]
 		palette := v.mem.Read(0xFF47)
 		color := palette & ((0x3) << (pixel * 2)) >> (pixel * 2)
 		return Pixel(color), pixel, true
@@ -388,13 +384,6 @@ func (v *Video) advanceLy(_ *Cpu) {
 	v.scanline++
 	v.mem.Write(LY_REGISTER, uint8(v.scanline))
 
-	lcdc := v.mem.Read(LCDC_REGISTER)
-	// bg disabled or outside window boundaries
-	wy := int(v.mem.Read(0xFF4A))
-	if (lcdc&0x1 > 0 && lcdc&0x20 > 0) && v.scanline > wy {
-		v.windowScanline++
-	}
-
 	// check for LY=0 as well
 	v.checkInterruption(true)
 	v.lastComparison = false
@@ -423,7 +412,6 @@ func (v *Video) scan(c *Cpu) {
 		if !v.disabled {
 			log.Printf("DISABLING PPU\n")
 			v.scanline = 0
-			v.windowScanline = 0
 			v.scancolumn = 0
 			v.setMode(0)
 			v.mem.Write(LY_REGISTER, uint8(v.scanline))
@@ -466,7 +454,6 @@ func (v *Video) scan(c *Cpu) {
 
 	// process v-blank
 	if v.mode == 1 {
-		v.windowScanline = 0
 		if v.scanline == 153 {
 			v.total2 = 0
 			v.scanline = 0
