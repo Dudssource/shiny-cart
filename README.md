@@ -1,4 +1,4 @@
-# shiny-cart
+# Shiny Cart
 
 A golang GameBoy emulator (DMG) created as a side project, just for fun.
 
@@ -28,3 +28,16 @@ Action buttons are mapped as below, direction buttons are mapped using left, up,
 
 ![Super Mario Land](media/super-mario-land.png)
 
+## References
+
+Again, this work was only possible thanks to help of many others, here are some very handful references.
+
+* [https://gbdev.io/](https://gbdev.io/)
+* [https://rgbds.gbdev.io/](https://rgbds.gbdev.io/)
+* [http://www.codeslinger.co.uk/pages/projects/gameboy.html](http://www.codeslinger.co.uk/pages/projects/gameboy.html)
+* [https://gbdev.gg8.se/wiki/articles/Main_Page](https://gbdev.gg8.se/wiki/articles/Main_Page)
+* [http://marc.rawer.de/Gameboy/Docs/GBCPUman.pdf](http://marc.rawer.de/Gameboy/Docs/GBCPUman.pdf)
+* [https://gekkio.fi/files/gb-docs/gbctr.pdf](https://gekkio.fi/files/gb-docs/gbctr.pdf)
+* [https://gbdev.io/gb-opcodes//optables/dark](https://gbdev.io/gb-opcodes//optables/dark)
+* [https://ia803208.us.archive.org/9/items/GameBoyProgManVer1.1/GameBoyProgManVer1.1.pdf](https://ia803208.us.archive.org/9/items/GameBoyProgManVer1.1/GameBoyProgManVer1.1.pdf)
+* [https://github.com/Gekkio/mooneye-gb](https://github.com/Gekkio/mooneye-gb)

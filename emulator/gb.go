@@ -17,6 +17,7 @@ type GameBoy struct {
 	joypad *Joypad
 	timer  *Timer
 	video  *Video
+	sound  *Sound
 }
 
 func NewGameBoy(debug, step, silent, profiling bool, breakPoints string, palette int) *GameBoy {
@@ -24,19 +25,23 @@ func NewGameBoy(debug, step, silent, profiling bool, breakPoints string, palette
 		debug = true
 	}
 
+	mem := make(memoryArea, 65536)
+	sound := NewSound(mem)
+
 	c := &Cpu{
 		step:        step,
 		silent:      silent,
 		breakPoints: strings.TrimSpace(breakPoints),
 		debug:       debug,
 		profiling:   profiling,
-		memory:      NewMemory(),
+		memory:      NewMemory(sound, mem),
 	}
 
 	return &GameBoy{
 		c:      c,
 		timer:  NewTimer(c),
 		joypad: NewJoypad(c.memory),
+		sound:  sound,
 		video: &Video{
 			mem:     c.memory,
 			mode:    2,
@@ -150,6 +155,10 @@ func (g *GameBoy) Loop(interval time.Duration) error {
 						}
 					}
 
+					// every T-cycle
+					g.sound.sync(tCycles)
+
+					// timer v2
 					g.timer.sync2(tCycles)
 
 					if tCycles == math.MaxInt32 {
@@ -186,6 +195,9 @@ func (g *GameBoy) Loop(interval time.Duration) error {
 		}
 	}
 
+	// stop sound
+	g.sound.stop()
+
 	// close window
 	rl.CloseWindow()
 
@@ -206,6 +218,7 @@ func (g *GameBoy) init() error {
 	}
 	g.joypad.init()
 	g.timer.init()
+	g.sound.init()
 
 	return nil
 }

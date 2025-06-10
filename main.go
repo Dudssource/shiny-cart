@@ -21,6 +21,7 @@ func main() {
 	silent := flag.Bool("m", false, "Silent mode")
 	profiling := flag.Bool("p", false, "Profiling mode")
 	breakPoints := flag.String("b", "", "Break points")
+	palette := flag.Int("c", 3, "Color palette")
 	interval := flag.Duration("t", 500*time.Millisecond, "Machine cycle interval")
 	flag.Parse()
 
@@ -32,7 +33,7 @@ func main() {
 	}
 
 	// emulator
-	g := emulator.NewGameBoy(*debug, *step, *silent, *profiling, *breakPoints)
+	g := emulator.NewGameBoy(*debug, *step, *silent, *profiling, *breakPoints, *palette)
 
 	// load ROM
 	if err := g.Load(*file); err != nil {
