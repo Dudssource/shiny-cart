@@ -155,11 +155,11 @@ func (g *GameBoy) Loop(interval time.Duration) error {
 						}
 					}
 
-					// every T-cycle
-					g.sound.sync(tCycles)
-
 					// timer v2
 					g.timer.sync2(tCycles)
+
+					// every T-cycle
+					g.sound.sync(tCycles)
 
 					if tCycles == math.MaxInt32 {
 						tCycles = 0

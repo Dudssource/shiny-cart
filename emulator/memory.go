@@ -27,12 +27,15 @@ type Memory struct {
 	joypad     uint8
 	dma        bool
 	resetTimer bool
+	sound      *Sound
 }
 
-func NewMemory() *Memory {
+func NewMemory(sound *Sound, mem memoryArea) *Memory {
 	return &Memory{
 		mbc:    NewMbc(),
 		joypad: 0xFF,
+		sound:  sound,
+		mem:    mem,
 	}
 }
 
@@ -117,6 +120,47 @@ func (m *Memory) Write(address Word, value uint8) {
 		// timer v2
 		m.resetTimer = true
 		return
+	}
+
+	// APU off all registers are read-only
+	if m.mem[NR52]&0x80 > 0 {
+
+		// trigger event SCH1
+		if address == NR14 && (value&0x80) > 0 {
+			// reset SCH1
+			m.sound.resetSC1()
+		}
+
+		// trigger event SCH2
+		if address == NR24 && (value&0x80) > 0 {
+			// reset SCH2
+			m.sound.resetSC2()
+		}
+	}
+
+	// Length counter SCH1
+	if address == NR11 {
+		m.sound.lengthCounterSC1 = 64 - int(value&0x3F)
+	}
+
+	// Length counter SCH2
+	if address == NR21 {
+		m.sound.lengthCounterSC2 = 64 - int(value&0x3F)
+	}
+
+	// Length counter SCH2
+	if address == NR31 {
+		m.sound.lengthCounterSC3 = 256 - int(value)
+	}
+
+	// Length counter SCH4
+	if address == NR41 {
+		m.sound.lengthCounterSC4 = 64 - int(value&0x3F)
+	}
+
+	// turn APU off
+	if address == NR52 && (value&0x80) == 0 {
+		m.sound.powerOff()
 	}
 
 	if address == PORT_JOYPAD {
