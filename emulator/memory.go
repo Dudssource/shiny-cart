@@ -136,6 +136,12 @@ func (m *Memory) Write(address Word, value uint8) {
 			// reset SCH2
 			m.sound.resetSC2()
 		}
+
+		// trigger event SCH3
+		if address == NR34 && (value&0x80) > 0 {
+			// reset SCH3
+			m.sound.resetSC3()
+		}
 	}
 
 	// Length counter SCH1
