@@ -154,7 +154,7 @@ func (m *Memory) Write(address Word, value uint8) {
 		m.sound.lengthCounterSC2 = 64 - int(value&0x3F)
 	}
 
-	// Length counter SCH2
+	// Length counter SCH3
 	if address == NR31 {
 		m.sound.lengthCounterSC3 = 256 - int(value)
 	}

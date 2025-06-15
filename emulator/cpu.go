@@ -108,7 +108,27 @@ func (c *Cpu) setup(mode Mode) {
 		c.memory.Write(PORT_SERIAL_TRANSFER_SC, 0x7E)
 		c.memory.Write(PORT_SERIAL_TRANSFER_SB, 0x00)
 		c.memory.mem[PORT_JOYPAD] = 0xCF // must bypass write method
-
+		c.memory.mem[NR10] = 0x80
+		c.memory.mem[NR11] = 0xBF
+		c.memory.mem[NR12] = 0xF3
+		c.memory.mem[NR13] = 0xFF
+		c.memory.mem[NR14] = 0xBF
+		c.memory.mem[NR21] = 0x3F
+		c.memory.mem[NR22] = 0x00
+		c.memory.mem[NR23] = 0xFF
+		c.memory.mem[NR24] = 0xBf
+		c.memory.mem[NR30] = 0x7F
+		c.memory.mem[NR31] = 0xFF
+		c.memory.mem[NR32] = 0x9F
+		c.memory.mem[NR33] = 0xFF
+		c.memory.mem[NR34] = 0xBF
+		c.memory.mem[NR41] = 0xFF
+		c.memory.mem[NR42] = 0x00
+		c.memory.mem[NR43] = 0x00
+		c.memory.mem[NR44] = 0xBF
+		c.memory.mem[NR50] = 0x77
+		c.memory.mem[NR51] = 0xF3
+		c.memory.mem[NR52] = 0xF1
 	}
 }
 

@@ -1,8 +1,6 @@
 package emulator
 
 import (
-	"fmt"
-
 	rl "github.com/gen2brain/raylib-go/raylib"
 )
 
@@ -49,7 +47,6 @@ var dutyWaveformTable = map[uint8]uint8{
 type Sound struct {
 	mem    memoryArea
 	stream rl.AudioStream
-	volume float32
 
 	// DIV lastCycleValue, used for falling edge and ticking the frame-sequencer
 	divLastValue uint8
@@ -82,7 +79,6 @@ type Sound struct {
 	lengthCounterSC3 int    // length counter SC3
 	timerSC3         uint16 // channel SC3 timer (frequency)
 	wavePositionSC3  uint8  // channel SC3 wave position
-	sampleBufferSC3  []int  // channel SC3 sample buffer
 	frameSeqStepSC3  int    // frame-sequencer SC3
 	disableSC3       bool   // disable SC3
 
@@ -94,12 +90,14 @@ type Sound struct {
 	useSC2 bool
 	useSC3 bool
 	useSC4 bool
+
+	channels int
 }
 
-func NewSound(mem memoryArea) *Sound {
+func NewSound(mem memoryArea, channels int) *Sound {
 	return &Sound{
-		mem:    mem,
-		volume: 0.5,
+		mem:      mem,
+		channels: channels,
 	}
 }
 
@@ -113,14 +111,24 @@ const (
 func (s *Sound) init() {
 	rl.InitAudioDevice()
 	rl.SetAudioStreamBufferSizeDefault(bufferSize)
-	s.stream = rl.LoadAudioStream(sampleRate, 32, 2)
+	s.stream = rl.LoadAudioStream(sampleRate, 32, 1)
 	rl.PlayAudioStream(s.stream)
 
-	s.useSC1 = true
-	s.useSC2 = true
-	s.useSC3 = true
+	if s.channels&0x1 > 0 {
+		s.useSC1 = true
+	}
 
-	s.sampleBufferSC3 = make([]int, 2)
+	if s.channels&0x2 > 0 {
+		s.useSC2 = true
+	}
+
+	if s.channels&0x4 > 0 {
+		s.useSC3 = true
+	}
+
+	if s.channels&0x8 > 0 {
+		s.useSC4 = true
+	}
 }
 
 /*
@@ -165,14 +173,7 @@ func (s *Sound) loadVolumeEnvelopeTimer(volumePeriodAddress int) int {
 // applies to channels CH1, CH2 and CH4
 // https://nightshade256.github.io/2021/03/27/gb-sound-emulation.html#envelope-function
 func (*Sound) dac(dacInput float32) float32 {
-	dacOutput := (dacInput / 7.5) - 1.0
-
-	// digital 0 maps to analog 1, not -1
-	// https://gbdev.io/pandocs/Audio_details.html#dacs
-	if dacInput == 0 {
-		dacOutput = 1
-	}
-	return dacOutput
+	return dacInput / 100
 }
 
 /*
@@ -393,13 +394,13 @@ func (s *Sound) stepSC1(tCycle int, fsStep bool) {
 // reset SCH1 (trigger event)
 func (s *Sound) resetSC1() {
 
-	if s.lengthCounterSC1 > 0 {
-		// reset length timer
-		s.lengthCounterSC1 = 64 - int(s.mem[NR11]&0x3F)
-	} else {
+	if s.lengthCounterSC1 == 0 {
 		// reset length timer
 		s.lengthCounterSC1 = 64
 	}
+
+	// reset FS
+	// s.frameSeqStepSC1 = 0
 
 	// enable
 	s.disableSC1 = false
@@ -532,7 +533,6 @@ func (s *Sound) stepSC2(tCycle int, fsStep bool) {
 
 		// calculate DAC
 		dacOutput := s.dac(float32(amplitude * s.volumeSC2))
-		dacOutput = float32(amplitude*s.volumeSC2) / 100
 
 		// CH2 left paning
 		if s.mem[NR51]&0x20 > 0 {
@@ -574,6 +574,9 @@ func (s *Sound) resetSC2() {
 		// reset length timer
 		s.lengthCounterSC2 = 64
 	}
+
+	// reset FS
+	// s.frameSeqStepSC2 = 0
 
 	// enable
 	s.disableSC2 = false
@@ -619,17 +622,6 @@ func (s *Sound) stepSC3(tCycle int, fsStep bool) {
 
 		// increment duty position (since values are 0-31, we wrap around by mod 32/0x20)
 		s.wavePositionSC3 = (s.wavePositionSC3 + 1) % 32
-
-		// calculate offsets
-		position := int(s.wavePositionSC3 / 2)
-		nibble := int(s.wavePositionSC3 % 2)
-
-		// store sample buffer
-		if nibble == 0 {
-			s.sampleBufferSC3[0] = int(s.mem[0xFF30+position]&0xF0) >> 4
-		} else {
-			s.sampleBufferSC3[1] = int(s.mem[0xFF30+position] & 0xF)
-		}
 	}
 
 	// frame-sequencer (ticks every 8192 t-cycles = 512hz)
@@ -669,51 +661,37 @@ func (s *Sound) stepSC3(tCycle int, fsStep bool) {
 	)
 
 	// DAC is on and channel is enabled
-	if len(s.sampleBufferSC3) == 2 && (s.mem[NR30]&0x80) > 0 && !s.disableSC3 {
+	if (s.mem[NR30]&0x80) > 0 && !s.disableSC3 {
 
 		// get volume
 		volume := (s.mem[NR32] & 0x60) >> 5
 
+		// calculate offsets
+		position := int(s.wavePositionSC3 / 2)
+		nibble := int(s.wavePositionSC3 % 2)
+		var sample int
+
+		// store sample buffer
+		if nibble == 0 {
+			sample = int(s.mem[0xFF30+position]&0xF0) >> 4
+		} else {
+			sample = int(s.mem[0xFF30+position] & 0xF)
+		}
+
 		// samples
-		first := s.dac(float32(s.sampleBufferSC3[0] >> int(volume)))
-		second := s.dac(float32(s.sampleBufferSC3[1] >> int(volume)))
-
-		// reset
-		s.sampleBufferSC3 = make([]int, 2)
-
-		// first sample
+		dacOutput := s.dac(float32(sample >> int(volume)))
 
 		// CH3 left paning
 		if s.mem[NR51]&0x40 > 0 {
-			leftOutput = first
+			leftOutput = dacOutput
 		}
 
 		// CH3 right paning
 		if s.mem[NR51]&0x40 > 0 {
-			rightOutput = first
+			rightOutput = dacOutput
 		}
 
-		// write samples (PCM)
-		s.sC3Buf = append(s.sC3Buf, leftOutput)  // left
-		s.sC3Buf = append(s.sC3Buf, rightOutput) // right
-
-		// second sample
-
-		// CH3 left paning
-		if s.mem[NR51]&0x40 > 0 {
-			leftOutput = second
-		}
-
-		// CH3 right paning
-		if s.mem[NR51]&0x40 > 0 {
-			rightOutput = second
-		}
-
-		// write samples (PCM)
-		s.sC3Buf = append(s.sC3Buf, leftOutput)  // left
-		s.sC3Buf = append(s.sC3Buf, rightOutput) // right
-
-	} else if len(s.sampleBufferSC3) == 2 && (s.mem[NR30]&0x80) > 0 && s.disableSC2 {
+	} else if (s.mem[NR30]&0x80) > 0 && s.disableSC2 {
 		// channel is disabled but DAC is on
 		// https://gbdev.io/pandocs/Audio_details.html#channels
 
@@ -727,18 +705,14 @@ func (s *Sound) stepSC3(tCycle int, fsStep bool) {
 			rightOutput = 1
 		}
 
-		// write samples (PCM)
-		s.sC3Buf = append(s.sC3Buf, leftOutput)  // left
-		s.sC3Buf = append(s.sC3Buf, rightOutput) // right
-
 	} else if (s.mem[NR30] & 0x80) == 0 {
 		// if DAC is off, disable the channel
 		s.disableSC3 = true
-
-		// write samples (PCM)
-		s.sC3Buf = append(s.sC3Buf, 0) // left
-		s.sC3Buf = append(s.sC3Buf, 0) // right
 	}
+
+	// write samples (PCM)
+	s.sC3Buf = append(s.sC3Buf, leftOutput)  // left
+	s.sC3Buf = append(s.sC3Buf, rightOutput) // right
 }
 
 // reset SCH3 (trigger event)
@@ -749,6 +723,9 @@ func (s *Sound) resetSC3() {
 		s.lengthCounterSC3 = 256
 	}
 
+	// reset FS
+	// s.frameSeqStepSC3 =3
+
 	// enable
 	s.disableSC3 = false
 
@@ -757,9 +734,6 @@ func (s *Sound) resetSC3() {
 
 	// reload timer
 	s.timerSC3 = s.loadTimerFrequencyWaveChannel(NR34, NR33)
-
-	// reset buffer
-	s.sampleBufferSC3 = make([]int, 2)
 }
 
 func (s *Sound) stop() {
@@ -826,7 +800,6 @@ func (s *Sound) sync(tCycle int) {
 		}
 
 		if rl.IsAudioStreamProcessed(s.stream) {
-			fmt.Println(len(mixbuf))
 
 			// update audio stream
 			rl.UpdateAudioStream(s.stream, mixbuf)

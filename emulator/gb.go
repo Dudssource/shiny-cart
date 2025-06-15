@@ -20,13 +20,13 @@ type GameBoy struct {
 	sound  *Sound
 }
 
-func NewGameBoy(debug, step, silent, profiling bool, breakPoints string, palette int) *GameBoy {
+func NewGameBoy(debug, step, silent, profiling bool, breakPoints string, palette, channels int) *GameBoy {
 	if step {
 		debug = true
 	}
 
 	mem := make(memoryArea, 65536)
-	sound := NewSound(mem)
+	sound := NewSound(mem, channels)
 
 	c := &Cpu{
 		step:        step,
