@@ -41,3 +41,7 @@ Again, this work was only possible thanks to help of many others, here are some 
 * [https://gbdev.io/gb-opcodes//optables/dark](https://gbdev.io/gb-opcodes//optables/dark)
 * [https://ia803208.us.archive.org/9/items/GameBoyProgManVer1.1/GameBoyProgManVer1.1.pdf](https://ia803208.us.archive.org/9/items/GameBoyProgManVer1.1/GameBoyProgManVer1.1.pdf)
 * [https://github.com/Gekkio/mooneye-gb](https://github.com/Gekkio/mooneye-gb)
+* [https://nightshade256.github.io/2021/03/27/gb-sound-emulation.html#envelope-function](https://nightshade256.github.io/2021/03/27/gb-sound-emulation.html#envelope-function)
+* [https://www.reddit.com/r/EmuDev/comments/5gkwi5/comment/dat3zni/](https://www.reddit.com/r/EmuDev/comments/5gkwi5/comment/dat3zni/)
+* [https://gbdev.gg8.se/wiki/articles/Gameboy_sound_hardware](https://gbdev.gg8.se/wiki/articles/Gameboy_sound_hardware)
+* [https://emudev.org/](https://emudev.org/)
