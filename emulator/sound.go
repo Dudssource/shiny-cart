@@ -971,7 +971,7 @@ func (s *Sound) sync(tCycle int) {
 			}
 
 			// mixing
-			f := (res * (volume + 1)) / samples
+			f := (res / 4.0) * (volume + 1)
 
 			// apply volume for sample and mix by averaging the channel's amplitude
 			mixbuf[i] = f
