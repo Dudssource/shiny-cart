@@ -23,6 +23,7 @@ func main() {
 	breakPoints := flag.String("b", "", "Break points")
 	palette := flag.Int("c", 3, "Color palette")
 	interval := flag.Duration("t", 500*time.Millisecond, "Machine cycle interval")
+	channels := flag.Int("h", 0xF, "Sound Channels")
 	flag.Parse()
 
 	// validate args
@@ -33,7 +34,7 @@ func main() {
 	}
 
 	// emulator
-	g := emulator.NewGameBoy(*debug, *step, *silent, *profiling, *breakPoints, *palette)
+	g := emulator.NewGameBoy(*debug, *step, *silent, *profiling, *breakPoints, *palette, *channels)
 
 	// load ROM
 	if err := g.Load(*file); err != nil {

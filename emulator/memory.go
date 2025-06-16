@@ -128,40 +128,46 @@ func (m *Memory) Write(address Word, value uint8) {
 		// trigger event SCH1
 		if address == NR14 && (value&0x80) > 0 {
 			// reset SCH1
-			m.sound.resetSC1()
+			m.sound.resetSCH1()
 		}
 
 		// trigger event SCH2
 		if address == NR24 && (value&0x80) > 0 {
 			// reset SCH2
-			m.sound.resetSC2()
+			m.sound.resetSCH2()
 		}
 
 		// trigger event SCH3
 		if address == NR34 && (value&0x80) > 0 {
 			// reset SCH3
-			m.sound.resetSC3()
+			m.sound.resetSCH3()
+		}
+
+		// trigger event SCH4
+		if address == NR44 && (value&0x80) > 0 {
+			// reset SCH4
+			m.sound.resetSCH4()
 		}
 	}
 
 	// Length counter SCH1
 	if address == NR11 {
-		m.sound.lengthCounterSC1 = 64 - int(value&0x3F)
+		m.sound.lengthCounterSCH1 = 64 - int(value&0x3F)
 	}
 
 	// Length counter SCH2
 	if address == NR21 {
-		m.sound.lengthCounterSC2 = 64 - int(value&0x3F)
+		m.sound.lengthCounterSCH2 = 64 - int(value&0x3F)
 	}
 
 	// Length counter SCH3
 	if address == NR31 {
-		m.sound.lengthCounterSC3 = 256 - int(value)
+		m.sound.lengthCounterSCH3 = 256 - int(value)
 	}
 
 	// Length counter SCH4
 	if address == NR41 {
-		m.sound.lengthCounterSC4 = 64 - int(value&0x3F)
+		m.sound.lengthCounterSCH4 = 64 - int(value&0x3F)
 	}
 
 	// turn APU off

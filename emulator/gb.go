@@ -218,9 +218,7 @@ func (g *GameBoy) init() error {
 	}
 	g.joypad.init()
 	g.timer.init()
-	g.sound.init()
-
-	return nil
+	return g.sound.init()
 }
 
 func (g *GameBoy) broadcast(cycle int) {
