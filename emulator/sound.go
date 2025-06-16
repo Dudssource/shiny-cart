@@ -1,6 +1,8 @@
 package emulator
 
 import (
+	"log"
+
 	rl "github.com/gen2brain/raylib-go/raylib"
 )
 
@@ -133,18 +135,22 @@ func (s *Sound) init() error {
 	rl.PlayAudioStream(s.stream)
 
 	if s.channels&0x1 > 0 {
+		log.Printf("ENABLING CHANNEL 1\n")
 		s.useSCH1 = true
 	}
 
 	if s.channels&0x2 > 0 {
+		log.Printf("ENABLING CHANNEL 2\n")
 		s.useSCH2 = true
 	}
 
 	if s.channels&0x4 > 0 {
+		log.Printf("ENABLING CHANNEL 3\n")
 		s.useSCH3 = true
 	}
 
 	if s.channels&0x8 > 0 {
+		log.Printf("ENABLING CHANNEL 4\n")
 		s.useSCH4 = true
 	}
 
