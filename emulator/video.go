@@ -111,7 +111,7 @@ func (v *Video) init(width, height int32) {
 	v.t = time.Now()
 
 	rl.InitWindow(v.w, v.h, "GameBoy-DMG Emulator")
-	rl.SetTargetFPS(59)
+	rl.SetTargetFPS(60)
 }
 
 func (v *Video) setMode(mode uint8) {

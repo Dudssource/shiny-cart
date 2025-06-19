@@ -2,6 +2,7 @@ package emulator
 
 import (
 	"log"
+	"time"
 
 	rl "github.com/gen2brain/raylib-go/raylib"
 )
@@ -60,6 +61,8 @@ var noiseChannelDivisorTable = map[uint8]uint8{
 type Sound struct {
 	stream rl.AudioStream
 	mem    memoryArea
+
+	soundPowerOn bool
 
 	// DIV lastCycleValue, used for falling edge and ticking the frame-sequencer
 	divLastValue uint8
@@ -122,8 +125,8 @@ func NewSound(mem memoryArea, channels int) *Sound {
 
 const (
 	// number of samples to buffer before enqueuing on the audio device
-	maxSamplesBufferSize = 4096
 	sampleRate           = 44100
+	maxSamplesBufferSize = 4096 // https://github.com/maxpoletaev/dendy/blob/main/consts/const.go#L16
 	bufferSize           = maxSamplesBufferSize
 )
 
@@ -244,6 +247,7 @@ func (s *Sound) calculateCH1SweepNewFrequency() uint16 {
 	// 11-bit overflow
 	if newFrequency > 2047 {
 		s.disableSCH1 = true
+		//s.sweepEnableSCH1 = false
 	}
 
 	return newFrequency
@@ -285,14 +289,15 @@ func (s *Sound) stepSCH1(tCycle int, fsStep bool) {
 						newFrequency := s.calculateCH1SweepNewFrequency()
 
 						if newFrequency <= 2047 && s.loadCH1SweepShift() > 0 {
-							//s.timerSCH1 = newFrequency
+
+							// store shadow frequency
 							s.sweepShadowRegSCH1 = newFrequency
 
 							// write back period LSB
 							s.mem[NR13] = uint8(newFrequency & 0xFF)
 
 							// write back period MSB
-							s.mem[NR13] = (s.mem[NR13] & 0xF8) | uint8((newFrequency&0x700)>>8)
+							s.mem[NR14] = (s.mem[NR14] & 0xF8) | uint8((newFrequency&0x700)>>8)
 
 							// check overflow again
 							s.calculateCH1SweepNewFrequency()
@@ -318,7 +323,7 @@ func (s *Sound) stepSCH1(tCycle int, fsStep bool) {
 		if s.frameSeqStepSCH1 == 0x7 {
 
 			// volume envelop period
-			volumeEnvelopePeriod := s.loadVolumeEnvelopeTimer(NR12)
+			volumeEnvelopePeriod := s.mem[NR12] & 0x7
 
 			// every sweep-pace ticks
 			if volumeEnvelopePeriod > 0 {
@@ -332,7 +337,7 @@ func (s *Sound) stepSCH1(tCycle int, fsStep bool) {
 				if s.volumeTimerSCH1 == 0 {
 
 					// reload volume timer
-					s.volumeTimerSCH1 = s.loadVolumeEnvelopeTimer(NR12)
+					s.volumeTimerSCH1 = int(volumeEnvelopePeriod)
 
 					// 0=decrease, 1=increase
 					envelopeIncreaseVolume := (s.mem[NR12] & 0x8) > 0
@@ -374,7 +379,7 @@ func (s *Sound) stepSCH1(tCycle int, fsStep bool) {
 	if (s.mem[NR12]&0xF8) > 0 && !s.disableSCH1 {
 
 		// duty
-		dutyPattern := (s.mem[NR21] & 0xC0) >> 6
+		dutyPattern := (s.mem[NR11] & 0xC0) >> 6
 
 		// amplitude (lookup table and get the bit pointed by dutyPosition)
 		amplitude := int((dutyWaveformTable[dutyPattern] & (1 << s.dutyPositionSCH1)) >> s.dutyPositionSCH1)
@@ -406,11 +411,11 @@ func (s *Sound) resetSCH1() {
 		s.lengthCounterSCH1 = 64
 	}
 
-	// reset FS
-	// s.frameSeqStepSCH1 = 0
-
 	// enable
 	s.disableSCH1 = false
+
+	// channel SCH1 enabled
+	// s.mem[NR52] |= 0x1
 
 	// load initial volume (for envelope)
 	s.volumeSCH1 = int(s.mem[NR12]&0xF0) >> 4
@@ -419,7 +424,7 @@ func (s *Sound) resetSCH1() {
 	s.timerSCH1 = s.loadTimerFrequencySquareWaveChannel(NR14, NR13)
 
 	// reload volume timer
-	s.volumeTimerSCH1 = s.loadVolumeEnvelopeTimer(NR12)
+	s.volumeTimerSCH1 = int(s.mem[NR12] & 0x7)
 
 	// load frequency to shadow
 	s.sweepShadowRegSCH1 = s.loadTimerPeriodSquareWaveChannel(NR14, NR13)
@@ -428,12 +433,17 @@ func (s *Sound) resetSCH1() {
 	s.reloadCH1SweepTimer()
 
 	// sweep enabled
-	s.sweepEnableSCH1 = s.sweepTimerSCH1 > 0 || s.loadCH1SweepShift() > 0
+	s.sweepEnableSCH1 = s.loadCH1SweepPeriod() > 0 || s.loadCH1SweepShift() > 0
 
 	// if sweep enabled AND shift is non-zero we only check overflow (by throwing away the result)
-	if s.sweepEnableSCH1 && s.loadCH1SweepShift() > 0 {
+	if s.loadCH1SweepShift() > 0 {
 		s.calculateCH1SweepNewFrequency()
 	}
+
+	// if dac is off keep channel disabled
+	// if s.mem[NR12]&0xF8 == 0 {
+	// 	s.disableSCH1 = true
+	// }
 }
 
 /*
@@ -562,11 +572,11 @@ func (s *Sound) resetSCH2() {
 		s.lengthCounterSCH2 = 64
 	}
 
-	// reset FS
-	// s.frameSeqStepSCH2 = 0
-
 	// enable
 	s.disableSCH2 = false
+
+	// channel SCH2 enabled
+	//s.mem[NR52] |= 0x2
 
 	// load initial volume (for envelope)
 	s.volumeSCH2 = int(s.mem[NR22]&0xF0) >> 4
@@ -579,6 +589,11 @@ func (s *Sound) resetSCH2() {
 
 	// reload timer
 	s.timerSCH2 = s.loadTimerFrequencySquareWaveChannel(NR24, NR23)
+
+	// if dac is off keep channel disabled
+	if s.mem[NR22]&0xF8 == 0 {
+		s.disableSCH2 = true
+	}
 }
 
 /*
@@ -690,17 +705,22 @@ func (s *Sound) resetSCH3() {
 		s.lengthCounterSCH3 = 256
 	}
 
-	// reset FS
-	// s.frameSeqStepSCH3 =3
-
 	// enable
 	s.disableSCH3 = false
+
+	// channel SCH3 enabled
+	//s.mem[NR52] |= 0x4
 
 	// reload index
 	s.wavePositionSCH3 = 0
 
 	// reload timer
 	s.timerSCH3 = s.loadTimerFrequencyWaveChannel(NR34, NR33)
+
+	// if dac is off keep channel disabled
+	if s.mem[NR30]&0x80 == 0 {
+		s.disableSCH3 = true
+	}
 }
 
 /*
@@ -736,11 +756,9 @@ func (s *Sound) stepSCH4(tCycle int, fsStep bool) {
 		if (s.mem[NR43] & 0x8) > 0 {
 
 			// also put the XOR result into bit 6
-			s.lsfrSCH4 = (s.lsfrSCH4 & 0xBF) | (lfsrLO << 6)
+			s.lsfrSCH4 = (s.lsfrSCH4 & 0x7F) | (lfsrLO << 6)
 		}
 
-		// ensure LSFR is 15 bits long
-		s.lsfrSCH4 &= 0x7FFF
 	}
 
 	// frame-sequencer (ticks every 8192 t-cycles = 512hz)
@@ -818,7 +836,7 @@ func (s *Sound) stepSCH4(tCycle int, fsStep bool) {
 	if (s.mem[NR42]&0xF8) > 0 && !s.disableSCH4 {
 
 		// amplitude (bit 0 of LFSR inverted)
-		amplitude := ^(s.lsfrSCH4 & 0x1)
+		amplitude := (^s.lsfrSCH4) & 0b01
 
 		// calculate DAC
 		output = s.dac(float32(int(amplitude) * s.volumeSCH4))
@@ -849,6 +867,9 @@ func (s *Sound) resetSCH4() {
 	// enable
 	s.disableSCH4 = false
 
+	// channel SCH4 enabled
+	//s.mem[NR52] |= 0x8
+
 	// load initial volume (for envelope)
 	s.volumeSCH4 = int(s.mem[NR42]&0xF0) >> 4
 
@@ -860,6 +881,11 @@ func (s *Sound) resetSCH4() {
 
 	// reset LFSR
 	s.lsfrSCH4 = 0x7FFF
+
+	// if dac is off keep channel disabled
+	if s.mem[NR42]&0xF8 == 0 {
+		s.disableSCH4 = true
+	}
 }
 
 /*
@@ -977,13 +1003,15 @@ func (s *Sound) sync(tCycle int) {
 			mixbuf[i] = f
 		}
 
-		if rl.IsAudioStreamProcessed(s.stream) {
-			rl.UpdateAudioStream(s.stream, mixbuf)
-			s.sCH1Buf = s.sCH1Buf[:0]
-			s.sCH2Buf = s.sCH2Buf[:0]
-			s.sCH3Buf = s.sCH3Buf[:0]
-			s.sCH4Buf = s.sCH4Buf[:0]
+		for !rl.IsAudioStreamProcessed(s.stream) {
+			time.Sleep(10 * time.Millisecond)
 		}
+
+		rl.UpdateAudioStream(s.stream, mixbuf)
+		s.sCH1Buf = s.sCH1Buf[:0]
+		s.sCH2Buf = s.sCH2Buf[:0]
+		s.sCH3Buf = s.sCH3Buf[:0]
+		s.sCH4Buf = s.sCH4Buf[:0]
 	}
 }
 
@@ -996,7 +1024,9 @@ func (s *Sound) powerOff() {
 		s.mem[reg] = 0
 	}
 
-	// frame sequencer step will begin from 0
+	s.soundPowerOn = false
+
+	// // frame sequencer step will begin from 0
 	s.frameSeqStepSCH1 = 0
 	s.frameSeqStepSCH2 = 0
 	s.frameSeqStepSCH3 = 0

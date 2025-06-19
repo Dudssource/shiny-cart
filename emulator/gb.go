@@ -84,99 +84,145 @@ func (g *GameBoy) Loop(interval time.Duration) error {
 	}
 
 	stop := make(chan byte, 1)
-	fps := make(chan byte, 1)
+	// fps := make(chan byte, 1)
 
-	go func(g *GameBoy, fps, stop chan byte) {
+	// go func(g *GameBoy, fps, stop chan byte) {
 
-		defer func() {
-			stop <- 0x0
-		}()
+	// 	defer func() {
+	// 		stop <- 0x0
+	// 	}()
 
-		tCycles := 0
-		mCycles := 0
+	// 	tCycles := 0
+	// 	mCycles := 0
 
-		start := time.Now()
-		cyclesPerSecond := 0
-		ticks := 0
+	// 	start := time.Now()
+	// 	cyclesPerSecond := 0
+	// 	ticks := 0
 
-		for {
-			select {
-			case <-stop:
-				return
-			case <-fps:
+	// 	for {
+	// 		select {
+	// 		case <-stop:
+	// 			return
+	// 		case <-fps:
 
-				// 4.194304 MHz / 60 FPS
-				for range 69905 {
+	// 			// 4.194304 MHz / 60 FPS
+	// 			for range 69905 {
 
-					if tCycles%4 == 0 {
+	// 				if tCycles%4 == 0 {
 
-						// broadcast machine cycle
-						g.broadcast(mCycles)
+	// 					// broadcast machine cycle
+	// 					g.broadcast(mCycles)
 
-						// 4Mihz (t-cycles) = 1 Mihz (m-cycles) == 1ms
-						if mCycles%1048 == 0 {
-							ticks++
-							// used for tshoot and profiling
-							if ticks == 1000 {
-								if g.c.profiling {
-									log.Println("Tick RTC after 1s")
-								}
-								ticks = 0
-							}
+	// 					// 4Mihz (t-cycles) = 1 Mihz (m-cycles) == 1ms
+	// 					if mCycles%1048 == 0 {
+	// 						ticks++
+	// 						// used for tshoot and profiling
+	// 						if ticks == 1000 {
+	// 							if g.c.profiling {
+	// 								log.Println("Tick RTC after 1s")
+	// 							}
+	// 							ticks = 0
+	// 						}
 
-							if g.c.memory.mbc.initialized() {
-								// RTC tick (if supported by cartridge)
-								g.c.memory.mbc.controller.Tick()
-							}
-						}
+	// 						if g.c.memory.mbc.initialized() {
+	// 							// RTC tick (if supported by cartridge)
+	// 							g.c.memory.mbc.controller.Tick()
+	// 						}
+	// 					}
 
-						if g.c.stopped {
-							return
-						}
+	// 					if g.c.stopped {
+	// 						return
+	// 					}
 
-						// overflow internal m-cycle counter, reset
-						if mCycles == math.MaxInt32 {
-							mCycles = 0
-						} else {
-							mCycles++
-						}
+	// 					// overflow internal m-cycle counter, reset
+	// 					if mCycles == math.MaxInt32 {
+	// 						mCycles = 0
+	// 					} else {
+	// 						mCycles++
+	// 					}
 
-						if time.Since(start).Seconds() >= 1 {
-							if g.c.profiling {
-								log.Printf("M-cycles per second %d\n", cyclesPerSecond)
-							}
-							cyclesPerSecond = 0
-							start = time.Now()
-						}
-						cyclesPerSecond++
+	// 					if time.Since(start).Seconds() >= 1 {
+	// 						if g.c.profiling {
+	// 							log.Printf("M-cycles per second %d\n", cyclesPerSecond)
+	// 						}
+	// 						cyclesPerSecond = 0
+	// 						start = time.Now()
+	// 					}
+	// 					cyclesPerSecond++
 
-						if rl.IsKeyPressed(rl.KeyP) {
-							g.c.step = true
-						}
-					}
+	// 					if rl.IsKeyPressed(rl.KeyP) {
+	// 						g.c.step = true
+	// 					}
+	// 				}
 
-					// timer v2
-					g.timer.sync2(tCycles)
+	// 				// timer v2
+	// 				g.timer.sync2(tCycles)
 
-					// every T-cycle
-					g.sound.sync(tCycles)
+	// 				// every T-cycle
+	// 				//g.sound.sync(tCycles)
 
-					if tCycles == math.MaxInt32 {
-						tCycles = 0
-					} else {
-						tCycles++
-					}
-				}
-			}
+	// 				if tCycles == math.MaxInt32 {
+	// 					tCycles = 0
+	// 				} else {
+	// 					tCycles++
+	// 				}
+	// 			}
+	// 		}
 
-		}
-	}(g, fps, stop)
+	// 	}
+	// }(g, fps, stop)
 
 	// block
 	for !rl.WindowShouldClose() && !g.c.stopped {
 
-		if len(fps) == 0 {
-			fps <- 0x0
+		// if len(fps) == 0 {
+		// 	fps <- 0x0
+		// }
+
+		var (
+			mCycles int
+			tCycles int
+		)
+
+		// 4.194304 MHz / 60 FPS
+		for range 69905 {
+
+			if tCycles%4 == 0 {
+
+				// broadcast machine cycle
+				g.broadcast(mCycles)
+
+				// 4Mihz (t-cycles) = 1 Mihz (m-cycles) == 1ms
+				if mCycles%1048 == 0 {
+					if g.c.memory.mbc.initialized() {
+						// RTC tick (if supported by cartridge)
+						g.c.memory.mbc.controller.Tick()
+					}
+				}
+
+				// overflow internal m-cycle counter, reset
+				if mCycles == math.MaxInt32 {
+					mCycles = 0
+				} else {
+					mCycles++
+				}
+
+				if rl.IsKeyPressed(rl.KeyP) {
+					g.c.step = true
+				}
+			}
+
+			// timer v2
+			g.timer.sync2(tCycles)
+
+			// every T-cycle
+			g.sound.sync(tCycles)
+
+			if tCycles == math.MaxInt32 {
+				tCycles = 0
+			} else {
+				tCycles++
+			}
 		}
 
 		// emulate raylib event loop

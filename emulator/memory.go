@@ -1,5 +1,7 @@
 package emulator
 
+import "log"
+
 // https://gbdev.io/pandocs/Memory_Map.html#memory-map
 const (
 	ROM_BANK_00_START = Word(0x0000)
@@ -171,8 +173,15 @@ func (m *Memory) Write(address Word, value uint8) {
 	}
 
 	// turn APU off
-	if address == NR52 && (value&0x80) == 0 {
-		m.sound.powerOff()
+	if address == NR52 {
+		if (value & 0x80) == 0 {
+			log.Printf("TURNING PPU OFF\n")
+			m.sound.powerOff()
+			m.mem[NR52] = 0x00
+		} else {
+			log.Printf("TURNING PPU ON\n")
+			m.mem[NR52] = 0xFF
+		}
 	}
 
 	if address == PORT_JOYPAD {
